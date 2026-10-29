@@ -5,6 +5,7 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
+  onCleanup,
   For,
   Show,
   type JSX,
@@ -14,39 +15,11 @@ import Kbd from "./Kbd";
 
 export type Match = { score: number; positions: number[] };
 
-// Ordered subsequences, favoring adjacent characters and word boundaries.
-function fuzzyMatch(text: string, query: string): Match | undefined {
-  if (!query) return { score: 0, positions: [] };
-  const lower = text.toLowerCase();
-  let best: Match | undefined;
-  for (let start = 0; start < lower.length; start++) {
-    if (lower[start] !== query[0]) continue;
-    const positions: number[] = [];
-    let cursor = start;
-    let score = -start - text.length * 0.01;
-    for (let queryIndex = 0; queryIndex < query.length; queryIndex++) {
-      const char = query[queryIndex];
-      const found = lower.indexOf(char, cursor);
-      if (found < 0) break;
-      const previous = positions.at(-1);
-      score += 10;
-      if (previous !== undefined)
-        score += found === previous + 1 ? 18 : -(found - previous - 1);
-      if (found === 0 || /[\s_\-/.:]/.test(text[found - 1])) score += 14;
-      if (
-        found > 0 &&
-        /[a-z]/.test(text[found - 1]) &&
-        /[A-Z]/.test(text[found])
-      )
-        score += 8;
-      positions.push(found);
-      cursor = found + 1;
-    }
-    if (positions.length === query.length && (!best || score > best.score))
-      best = { score, positions };
-  }
-  return best;
-}
+export type FuzzyResult = {
+  index: number;
+  matches: (Match | null)[];
+  score: number;
+};
 
 export function MatchText(props: { text: string; positions: number[] }) {
   const segments = createMemo(() => {
@@ -83,8 +56,11 @@ export type FuzzyPickerProps<T> = {
   emptyText?: string;
   items: T[];
   searchTexts: (item: T) => string[];
-  compare: (a: T, b: T) => number;
-  renderItem: (item: T, matches: (Match | undefined)[]) => JSX.Element;
+  findMatches: (
+    query: string,
+    candidates: string[][],
+  ) => Promise<FuzzyResult[]>;
+  renderItem: (item: T, matches: (Match | null)[]) => JSX.Element;
   disabled?: (item: T) => boolean;
   dimDisabled?: boolean;
   busy?: boolean;
@@ -103,19 +79,14 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
   let input: HTMLInputElement | undefined;
   let list: HTMLDivElement | undefined;
   let pending: { item: T } | undefined;
-  const results = createMemo(() => {
-    const needle = query().trim().toLowerCase().replace(/\s+/g, "");
-    return props.items
-      .flatMap((item) => {
-        const matches = props
-          .searchTexts(item)
-          .map((text) => fuzzyMatch(text, needle));
-        const score = Math.max(
-          ...matches.map((match) => match?.score ?? -Infinity),
-        );
-        return score > -Infinity ? [{ item, matches, score }] : [];
-      })
-      .sort((a, b) => b.score - a.score || props.compare(a.item, b.item));
+  const [results, setResults] = createSignal<
+    { item: T; matches: (Match | null)[]; score: number }[]
+  >([]);
+  const [loading, setLoading] = createSignal(false);
+  const [error, setError] = createSignal("");
+  let generation = 0;
+  onCleanup(() => {
+    ++generation;
   });
   createEffect(() => {
     if (props.open) {
@@ -124,8 +95,37 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
     }
   });
   createEffect(() => {
-    results();
-    setSelected(0);
+    const request = ++generation;
+    if (!props.open) {
+      setLoading(false);
+      return;
+    }
+    const needle = query();
+    const items = Array.from(props.items);
+    const candidates = items.map((item) => props.searchTexts(item));
+    setLoading(true);
+    setError("");
+    // A response belongs only to its query and candidate snapshot.
+    void props
+      .findMatches(needle, candidates)
+      .then((matches) => {
+        if (request !== generation) return;
+        setResults(
+          matches.map((match) => ({
+            item: items[match.index],
+            matches: match.matches,
+            score: match.score,
+          })),
+        );
+        setSelected(0);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (request !== generation) return;
+        setError(String(error));
+        setResults([]);
+        setLoading(false);
+      });
   });
   createEffect(() => {
     const active = selected();
@@ -139,7 +139,7 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
   const disabled = (item: T) => !!props.busy || !!props.disabled?.(item);
   function choose(index: number) {
     const result = results()[index];
-    if (!result || disabled(result.item)) return;
+    if (!result || loading() || error() || disabled(result.item)) return;
     if (props.selectAfterClose) pending = { item: result.item };
     props.onOpenChange(false);
     if (!props.selectAfterClose) props.onSelect(result.item);
@@ -219,7 +219,7 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
             )}
             role="listbox"
             aria-label={props.listLabel}
-            aria-busy={props.busy}
+            aria-busy={props.busy || loading()}
           >
             <For each={results()}>
               {(result, index) => (
@@ -227,7 +227,7 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
                   id={`${listId}-${index()}`}
                   role="option"
                   aria-selected={selected() === index()}
-                  aria-disabled={disabled(result.item)}
+                  aria-disabled={loading() || disabled(result.item)}
                   class="flex min-h-7 cursor-pointer items-center gap-4 rounded-[3px] px-[9px] py-[3px] text-xs aria-selected:bg-picker-selection aria-selected:text-foreground"
                   classList={{
                     "cursor-default opacity-40":
@@ -242,9 +242,16 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
                 </div>
               )}
             </For>
-            <Show when={!results().length}>
+            <Show when={error()}>
+              <div role="alert" class="px-[9px] py-3 text-xs text-destructive">
+                Could not search: {error()}
+              </div>
+            </Show>
+            <Show when={!results().length && !error()}>
               <div class="px-[9px] py-3 text-xs text-muted">
-                {props.emptyText ?? "No matches"}
+                {loading()
+                  ? "Finding matches…"
+                  : (props.emptyText ?? "No matches")}
               </div>
             </Show>
           </div>

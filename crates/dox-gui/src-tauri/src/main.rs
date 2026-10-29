@@ -19,6 +19,10 @@ fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 #[tauri::command(async)]
+fn fuzzy_find(query: String, candidates: Vec<Vec<String>>) -> Vec<dox_core::FuzzyResult> {
+    dox_core::fuzzy_find(&query, &candidates)
+}
+#[tauri::command(async)]
 fn open_library(
     path: String,
     app: tauri::AppHandle,
@@ -107,6 +111,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            fuzzy_find,
             open_library,
             list_notes,
             cached_notes,

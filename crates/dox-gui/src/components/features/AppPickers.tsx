@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { Show } from "solid-js";
 import {
   bindingLabel,
@@ -6,9 +7,13 @@ import {
   type UICommand,
 } from "../../utils/commands";
 import Kbd from "../ui/Kbd";
-import FuzzyPicker, { MatchText } from "../ui/FuzzyPicker";
+import FuzzyPicker, { MatchText, type FuzzyResult } from "../ui/FuzzyPicker";
 import NoteTitle, { titleText, type TitledNote } from "./NoteTitle";
 import NoteIcon from "./NoteIcon";
+
+function findMatches(query: string, candidates: string[][]) {
+  return invoke<FuzzyResult[]>("fuzzy_find", { query, candidates });
+}
 
 export function CommandPicker(props: {
   open: boolean;
@@ -28,7 +33,7 @@ export function CommandPicker(props: {
       emptyText="No commands found"
       items={props.commands}
       searchTexts={(command) => [command.title]}
-      compare={(a, b) => a.title.localeCompare(b.title)}
+      findMatches={findMatches}
       disabled={(command) => !command.enabled}
       dimDisabled
       selectAfterClose
@@ -77,9 +82,7 @@ export function NotePicker(props: NotePickerProps) {
       items={props.notes}
       busy={props.busy}
       searchTexts={(note) => [titleText(note), note.title, note.id]}
-      compare={(a, b) =>
-        titleText(a).localeCompare(titleText(b)) || a.id.localeCompare(b.id)
-      }
+      findMatches={findMatches}
       onSelect={(note) => props.onSelect(note.id)}
       onCloseAutoFocus={props.onCloseAutoFocus}
       renderItem={(note, matches) => (
