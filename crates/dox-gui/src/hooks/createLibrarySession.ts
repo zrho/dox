@@ -186,6 +186,14 @@ export function createLibrarySession() {
         else main?.focus();
       });
   }
+  function closeFocused() {
+    if (sidebarVisible() && sidebar?.contains(document.activeElement)) {
+      toggleSidebar();
+      return;
+    }
+    const key = activeKey();
+    if (key !== undefined) closeColumn(key);
+  }
   async function refresh() {
     const token = ++indexRequest;
     const root = library();
@@ -564,6 +572,7 @@ export function createLibrarySession() {
       setCommandPanelOpen(true);
     },
     find: openPicker,
+    close: closeFocused,
     "new-note": () => create(),
     "new-literature": () => create("literature"),
     "open-library": chooseLibrary,
@@ -605,6 +614,8 @@ export function createLibrarySession() {
         return !!library();
       case "undo-delete":
         return !!lastDeleted();
+      case "close":
+        return !!current() || sidebarVisible();
       case "insert":
         return (
           !!current() &&
@@ -641,6 +652,7 @@ export function createLibrarySession() {
         "find",
         "insert",
         "toggle-sidebar",
+        "close",
         "edit",
         "zoom-in",
         "zoom-out",

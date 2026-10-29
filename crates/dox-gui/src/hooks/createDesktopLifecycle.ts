@@ -52,6 +52,8 @@ export function createDesktopLifecycle(options: {
       })
       .catch(options.onError);
     const onKey = (event: KeyboardEvent) => {
+      // Nested controls get the first chance to dismiss themselves.
+      if (event.defaultPrevented) return;
       const command = commandDefinitions.find((command) =>
         matchesBinding(
           event,
@@ -62,6 +64,7 @@ export function createDesktopLifecycle(options: {
       event.preventDefault();
       if (
         options.modalOpen() ||
+        (command.id === "close" && event.repeat) ||
         (command.id === "insert" && !options.editorFocused())
       )
         return;

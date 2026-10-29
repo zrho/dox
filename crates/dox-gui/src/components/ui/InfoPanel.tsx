@@ -1,5 +1,6 @@
 import { cn } from "../../utils/cn";
 import { createSignal, createUniqueId, Show, type JSX } from "solid-js";
+import { matchesBinding } from "../../utils/commands";
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import Button from "./Button";
 export type InfoPanelViewProps = {
@@ -22,6 +23,20 @@ export function InfoPanelView(props: InfoPanelViewProps) {
         props.class,
       )}
       aria-label={props.title}
+      onKeyDown={(event) => {
+        if (
+          !event.defaultPrevented &&
+          props.expanded &&
+          matchesBinding(event, { key: "escape", primary: false })
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onToggle();
+          event.currentTarget
+            .querySelector<HTMLButtonElement>("button[aria-controls]")
+            ?.focus();
+        }
+      }}
     >
       <header class="flex min-h-[25px] items-center gap-1 px-2 py-px">
         <h2 class="mr-2 shrink-0 text-[9px] leading-[18px] font-medium tracking-[1px] text-muted">

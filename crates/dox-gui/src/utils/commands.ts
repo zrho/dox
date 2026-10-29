@@ -1,6 +1,8 @@
 export type Keybinding = {
   key: string;
   shift?: boolean;
+  /** Command on macOS or Control elsewhere; required unless explicitly false. */
+  primary?: boolean;
 };
 // All application commands and their shortcuts live here. A missing shortcut
 // means the command is available through the command panel only.
@@ -11,6 +13,11 @@ export const commandDefinitions = [
     binding: { key: "p", shift: true },
   },
   { id: "find", title: "Find note", binding: { key: "p" } },
+  {
+    id: "close",
+    title: "Close focused pane",
+    binding: { key: "escape", primary: false },
+  },
   { id: "new-note", title: "New note", binding: { key: "n" } },
   { id: "new-literature", title: "New empty literature item" },
   { id: "open-library", title: "Open library" },
@@ -41,7 +48,7 @@ export type UICommand = {
 };
 export function bindingLabel(binding?: Keybinding): string {
   return binding
-    ? `⌘${binding.shift ? "⇧" : ""}${binding.key.toUpperCase()}`
+    ? `${binding.primary === false ? "" : "⌘"}${binding.shift ? "⇧" : ""}${binding.key === "escape" ? "Esc" : binding.key.toUpperCase()}`
     : "";
 }
 export function commandBinding(id: CommandId): string {
@@ -55,7 +62,7 @@ export function matchesBinding(
   if (
     !binding ||
     event.isComposing ||
-    !(event.metaKey || event.ctrlKey) ||
+    (event.metaKey || event.ctrlKey) !== (binding.primary !== false) ||
     event.altKey
   )
     return false;

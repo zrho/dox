@@ -181,6 +181,7 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
           )}
           onOpenAutoFocus={onOpenAutoFocus}
           onCloseAutoFocus={onCloseAutoFocus}
+          onEscapeKeyDown={(event) => event.stopPropagation()}
         >
           <Dialog.Title class="sr-only">{props.title}</Dialog.Title>
           <div class="flex items-center gap-3 border-b border-border px-[13px] py-2">
