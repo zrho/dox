@@ -111,7 +111,7 @@ export function TooltipContent(props: {
       role="tooltip"
       data-slot="tooltip"
       class={cn(
-        "pointer-events-none fixed z-100 max-w-[min(360px,calc(100vw_-_16px))] rounded border border-border-strong bg-popover px-[9px] py-[6px] font-sans text-xs leading-[1.4] wrap-anywhere text-foreground shadow-lg",
+        "pointer-events-none fixed z-100 max-w-[min(360px,calc(100vw_-_16px))] rounded border border-border-strong bg-popover px-[9px] py-[6px] font-sans text-xs leading-[1.4] wrap-anywhere text-foreground shadow-lg shadow-crust/60",
         props.class,
       )}
       style={{ left: `${props.left}px`, top: `${props.top}px` }}

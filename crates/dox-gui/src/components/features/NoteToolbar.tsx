@@ -1,3 +1,5 @@
+import Pin from "lucide-solid/icons/pin";
+import PinOff from "lucide-solid/icons/pin-off";
 import { Show } from "solid-js";
 import Pencil from "lucide-solid/icons/pencil";
 import Eye from "lucide-solid/icons/eye";
@@ -15,11 +17,13 @@ export default function NoteToolbar(props: {
 }) {
   return (
     <header class="flex h-8 shrink-0 items-center justify-between border-b border-border px-[10px]">
-      <div class="flex gap-[7px] text-xs text-muted">
+      <div class="flex items-center gap-[7px] text-xs text-muted">
         notes <span>/</span>
         <span class="text-foreground">{props.note?.id ?? "—"}</span>
         <Show when={props.dirty}>
-          <span class="text-[10px] text-warning">● Unsaved</span>
+          <span class="inline-flex items-center text-[10px] leading-none text-warning">
+            ● Unsaved
+          </span>
         </Show>
       </div>
       <Show when={props.note}>
@@ -32,6 +36,22 @@ export default function NoteToolbar(props: {
               {props.note?.metadata.date}
             </time>
           </Show>
+          <Button
+            size="icon"
+            selected={props.note?.metadata.pinned === true}
+            aria-label={
+              props.note?.metadata.pinned === true ? "Unpin item" : "Pin item"
+            }
+            busy={props.busy}
+            onClick={() => props.onCommand("toggle-pin")}
+          >
+            <Show
+              when={props.note?.metadata.pinned === true}
+              fallback={<Pin size={14} strokeWidth={1.5} aria-hidden="true" />}
+            >
+              <PinOff size={14} strokeWidth={1.5} aria-hidden="true" />
+            </Show>
+          </Button>
           <Button
             size="icon"
             busy={props.busy}

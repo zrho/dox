@@ -21,6 +21,10 @@ export const commandDefinitions = [
   { id: "insert", title: "Insert link or citation", binding: { key: "k" } },
   { id: "copy", title: "Copy note link or citation" },
   { id: "toggle-sidebar", title: "Toggle sidebar", binding: { key: "b" } },
+  { id: "zoom-in", title: "Zoom in content", binding: { key: "=" } },
+  { id: "zoom-out", title: "Zoom out content", binding: { key: "-" } },
+  { id: "zoom-reset", title: "Reset content zoom", binding: { key: "0" } },
+  { id: "toggle-pin", title: "Toggle pin" },
   { id: "delete", title: "Delete note" },
   { id: "undo-delete", title: "Undo last note deletion" },
 ] as const satisfies readonly {
@@ -48,11 +52,14 @@ export function matchesBinding(
   event: KeyboardEvent,
   binding?: Keybinding,
 ): boolean {
+  if (
+    !binding ||
+    event.isComposing ||
+    !(event.metaKey || event.ctrlKey) ||
+    event.altKey
+  )
+    return false;
   return (
-    !!binding &&
-    !event.isComposing &&
-    (event.metaKey || event.ctrlKey) &&
-    !event.altKey &&
     event.shiftKey === !!binding.shift &&
     event.key.toLowerCase() === binding.key
   );

@@ -63,7 +63,7 @@ export function MatchText(props: { text: string; positions: number[] }) {
   return (
     <For each={segments()}>
       {(part) => (
-        <span class={part.matched ? "text-[#a9ceff] font-semibold" : undefined}>
+        <span class={part.matched ? "text-link font-semibold" : undefined}>
           {part.text}
         </span>
       )}
@@ -173,10 +173,10 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-20 bg-black/30" />
+        <Dialog.Overlay class="fixed inset-0 z-20 bg-crust/60" />
         <Dialog.Content
           class={cn(
-            "fixed top-[14vh] left-1/2 z-21 w-[min(560px,calc(100vw_-_48px))] -translate-x-1/2 overflow-hidden rounded-[7px] border border-border-strong bg-panel shadow-[0_16px_64px_#0009]",
+            "fixed top-[14vh] left-1/2 z-21 w-[min(560px,calc(100vw_-_48px))] -translate-x-1/2 overflow-hidden rounded-[7px] border border-border-strong bg-panel shadow-[0_16px_64px] shadow-crust/60",
             props.class,
           )}
           onOpenAutoFocus={onOpenAutoFocus}

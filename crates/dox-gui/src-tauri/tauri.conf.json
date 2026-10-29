@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "dox", "backgroundColor": "#1c1e22", "width": 1200, "height": 800, "minWidth": 800, "minHeight": 540 }],
+    "windows": [{ "title": "dox", "backgroundColor": "#1e1e2e", "width": 1200, "height": 800, "minWidth": 800, "minHeight": 540 }],
     "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'none'; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420" }
   },
   "bundle": { "active": true, "targets": ["app"], "category": "Productivity", "shortDescription": "Local, linked Typst notes" }

@@ -21,7 +21,7 @@ export default function LibraryPage() {
       sidebar={
         <LibraryTree
           path={app.library()}
-          notes={app.index().notes}
+          notes={app.pinnedNotes()}
           activeId={app.current()?.note.id}
           busy={app.busy()}
           onOpen={app.openNote}
@@ -35,26 +35,6 @@ export default function LibraryPage() {
           busy={app.busy()}
           onCommand={app.executeCommand}
         />
-      }
-      footer={
-        <footer class="flex h-[22px] shrink-0 justify-between border-t border-border px-[10px] py-1 text-[10px] text-muted">
-          <span>
-            {app.mode() === "edit" ? app.current()?.note.metadata.document : ""}
-          </span>
-          <Show when={app.lastDeleted()} fallback={<span>dox</span>}>
-            <span class="flex items-center gap-2">
-              Deleted {app.lastDeleted()!.id}
-              <Button
-                variant="link"
-                size="inline"
-                busy={app.busy()}
-                onClick={() => app.executeCommand("undo-delete")}
-              >
-                Undo
-              </Button>
-            </span>
-          </Show>
-        </footer>
       }
       overlays={
         <>
@@ -104,6 +84,8 @@ export default function LibraryPage() {
           mode={app.mode()}
           source={app.source()}
           html={app.html()}
+          editorZoom={app.editorZoom()}
+          viewZoom={app.viewZoom()}
           onSourceChange={app.setSource}
           onNavigate={app.openNote}
           getNoteTitle={app.getNoteTitle}

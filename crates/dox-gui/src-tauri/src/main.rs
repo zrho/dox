@@ -69,6 +69,17 @@ fn save_note(
         .map_err(error)
 }
 #[tauri::command(async)]
+fn set_note_pinned(
+    id: String,
+    pinned: bool,
+    revision: String,
+    state: State<'_, Mutex<Session>>,
+) -> Result<NoteDocument, String> {
+    library(&state)?
+        .set_pinned(&id, pinned, &revision)
+        .map_err(error)
+}
+#[tauri::command(async)]
 fn delete_note(
     id: String,
     revision: String,
@@ -103,6 +114,7 @@ fn main() {
             create_note,
             create_literature,
             save_note,
+            set_note_pinned,
             render_note,
             delete_note,
             restore_note

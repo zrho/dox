@@ -1,3 +1,10 @@
+import "@fontsource/spectral/400.css";
+import "@fontsource/spectral/400-italic.css";
+import "@fontsource/spectral/600.css";
+import "@fontsource/spectral/600-italic.css";
+import "@fontsource/spectral/700.css";
+import "@fontsource/spectral/700-italic.css";
+import "@fontsource/jetbrains-mono/400.css";
 import { render } from "solid-js/web";
 import App from "./App";
 import "./style.css";

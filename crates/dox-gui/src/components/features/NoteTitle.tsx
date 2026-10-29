@@ -57,7 +57,7 @@ function titleHtml(note: TitledNote, positions?: number[]) {
       const math = node.parentElement?.closest("math");
       if (math) {
         if ([...matches].some((index) => index >= start && index < offset))
-          math.classList.add("text-[#a9ceff]", "font-semibold");
+          math.classList.add("text-link", "font-semibold");
         continue;
       }
       const fragment = document.createDocumentFragment();
@@ -68,7 +68,7 @@ function titleHtml(note: TitledNote, positions?: number[]) {
         while (end < text.length && matches.has(start + end) === matched) end++;
         if (matched) {
           const span = document.createElement("span");
-          span.className = "text-[#a9ceff] font-semibold";
+          span.className = "text-link font-semibold";
           span.textContent = text.slice(index, end);
           fragment.append(span);
         } else fragment.append(document.createTextNode(text.slice(index, end)));

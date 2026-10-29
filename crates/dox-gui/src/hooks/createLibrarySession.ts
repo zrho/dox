@@ -30,6 +30,14 @@ export function createLibrarySession() {
   const [current, setCurrent] = createSignal<Document>();
   const [source, setSource] = createSignal("");
   const [mode, setMode] = createSignal<"edit" | "view">("view");
+  const [editorZoom, setEditorZoom] = createSignal(100);
+  const [viewZoom, setViewZoom] = createSignal(100);
+  function zoomContent(change: number | "reset") {
+    const setZoom = mode() === "edit" ? setEditorZoom : setViewZoom;
+    setZoom((value) =>
+      change === "reset" ? 100 : Math.max(50, Math.min(250, value + change)),
+    );
+  }
   const [html, setHtml] = createSignal("");
   const [error, setError] = createSignal("");
   const [lastDeleted, setLastDeleted] = createSignal<DeletedNote>();
@@ -39,6 +47,9 @@ export function createLibrarySession() {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const [pickerMode, setPickerMode] = createSignal<"open" | "insert">("open");
   const dirty = createMemo(() => !!current() && source() !== current()!.source);
+  const pinnedNotes = createMemo(() =>
+    index().notes.filter((note) => note.metadata.pinned === true),
+  );
   const backlinks = createMemo(() =>
     index().notes.filter((n) => n.links.includes(current()?.note.id ?? "")),
   );
@@ -166,6 +177,32 @@ export function createLibrarySession() {
     setSource(doc.source);
     setExternal(false);
     // Show save-time diagnostics immediately, even before the library refresh finishes.
+    setIndex((previous) => ({
+      ...previous,
+      notes: previous.notes.map((note) =>
+        note.id === doc.note.id ? doc.note : note,
+      ),
+      diagnostics: [
+        ...previous.diagnostics.filter(
+          (issue) => issue.note_id !== doc.note.id,
+        ),
+        ...doc.note.diagnostics,
+      ],
+    }));
+    await refresh();
+  }
+  async function togglePin() {
+    const active = current();
+    if (!active) return;
+    ++indexRequest;
+    const doc = await invoke<Document>("set_note_pinned", {
+      id: active.note.id,
+      pinned: active.note.metadata.pinned !== true,
+      revision: active.note.revision,
+    });
+    // Only the saved baseline changes. Keep any unsaved editor draft intact.
+    setCurrent(doc);
+    setExternal(false);
     setIndex((previous) => ({
       ...previous,
       notes: previous.notes.map((note) =>
@@ -438,10 +475,22 @@ export function createLibrarySession() {
     },
     copy: copyReference,
     "toggle-sidebar": toggleSidebar,
+    "toggle-pin": togglePin,
+    "zoom-in": () => {
+      zoomContent(10);
+    },
+    "zoom-out": () => {
+      zoomContent(-10);
+    },
+    "zoom-reset": () => {
+      zoomContent("reset");
+    },
     delete: deleteCurrent,
     "undo-delete": undoDelete,
   };
   function commandEnabled(id: CommandId) {
+    if (id === "zoom-in" || id === "zoom-out" || id === "zoom-reset")
+      return !!current();
     if (busy()) return false;
     switch (id) {
       case "commands":
@@ -469,6 +518,12 @@ export function createLibrarySession() {
   const commands = createMemo<UICommand[]>(() =>
     commandDefinitions.map((command) => ({
       ...command,
+      title:
+        command.id === "toggle-pin"
+          ? current()?.note.metadata.pinned === true
+            ? "Unpin item"
+            : "Pin item"
+          : command.title,
       enabled: commandEnabled(command.id),
     })),
   );
@@ -478,7 +533,18 @@ export function createLibrarySession() {
       edit();
       return;
     }
-    if (["commands", "find", "insert", "toggle-sidebar", "edit"].includes(id)) {
+    if (
+      [
+        "commands",
+        "find",
+        "insert",
+        "toggle-sidebar",
+        "edit",
+        "zoom-in",
+        "zoom-out",
+        "zoom-reset",
+      ].includes(id)
+    ) {
       commandHandlers[id]();
     } else {
       void run(async () => {
@@ -519,11 +585,14 @@ export function createLibrarySession() {
   });
   return {
     library,
+    pinnedNotes,
     sidebarVisible,
     index,
     current,
     source,
     mode,
+    editorZoom,
+    viewZoom,
     html,
     error,
     lastDeleted,

@@ -6,6 +6,8 @@ export default function NoteWorkspace(props: {
   mode: "edit" | "view";
   source: string;
   html: string;
+  editorZoom: number;
+  viewZoom: number;
   onSourceChange: (source: string) => void;
   onNavigate: (id: string) => void;
   getNoteTitle: (id: string) => string | undefined;
@@ -16,6 +18,7 @@ export default function NoteWorkspace(props: {
       <div class="h-full min-h-0 hidden:hidden" hidden={props.mode !== "view"}>
         <NoteView
           html={props.html}
+          zoom={props.viewZoom}
           active={props.mode === "view"}
           getNoteTitle={props.getNoteTitle}
           onNavigate={props.onNavigate}
@@ -24,7 +27,8 @@ export default function NoteWorkspace(props: {
       <div class="h-full min-h-0 hidden:hidden" hidden={props.mode !== "edit"}>
         <textarea
           ref={props.editorRef}
-          class="h-full w-full resize-none rounded-none border-0 bg-background px-3 py-2 font-mono text-[13px] leading-[1.5] text-editor outline-none [tab-size:2]"
+          class="h-full w-full resize-none rounded-none border-0 bg-background px-3 py-2 font-editor leading-[1.5] text-editor outline-none [tab-size:2]"
+          style={{ "font-size": `${(13 * props.editorZoom) / 100}px` }}
           aria-label={
             props.note.metadata.type === "literature"
               ? "BibTeX source"

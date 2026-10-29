@@ -4,25 +4,29 @@
   --spacing: 4px;
   --text-xs: 12px;
   --text-sm: 14px;
-  --color-background: #1c1e22;
-  --color-panel: #202228;
-  --color-popover: #292d35;
-  --color-hover: #30343c;
-  --color-selection: #303743;
-  --color-picker-selection: #354154;
-  --color-border: #33363d;
-  --color-border-strong: #454c58;
-  --color-foreground: #d5d8df;
-  --color-muted: #868d9c;
-  --color-subtle: #697483;
-  --color-accent: #a7bdd7;
-  --color-ring: #8caed2;
-  --color-editor: #c9d4e5;
-  --color-destructive: #efb7bd;
-  --color-danger-surface: #3d282b;
-  --color-warning: #e2cc9d;
-  --color-warning-surface: #393328;
+  /* Catppuccin Mocha: https://catppuccin.com/palette/ */
+  --color-background: #1e1e2e; /* Base */
+  --color-panel: #181825; /* Mantle */
+  --color-popover: #313244; /* Surface 0 */
+  --color-hover: #313244;
+  --color-selection: #45475a; /* Surface 1 */
+  --color-picker-selection: #45475a;
+  --color-border: #313244;
+  --color-border-strong: #45475a;
+  --color-foreground: #cdd6f4; /* Text */
+  --color-muted: #a6adc8; /* Subtext 0 */
+  --color-subtle: #7f849c; /* Overlay 1 */
+  --color-accent: #cba6f7; /* Mauve */
+  --color-link: #89b4fa; /* Blue */
+  --color-ring: #b4befe; /* Lavender */
+  --color-editor: #cdd6f4;
+  --color-destructive: #f38ba8; /* Red */
+  --color-danger-surface: color-mix(in srgb, #f38ba8 12%, #1e1e2e);
+  --color-warning: #f9e2af; /* Yellow */
+  --color-warning-surface: color-mix(in srgb, #f9e2af 12%, #1e1e2e);
+  --color-crust: #11111b;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-editor: "JetBrains Mono", ui-monospace, monospace;
   --font-mono: ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -50,7 +54,7 @@
     display: none !important;
   }
   ::selection {
-    background: #3a526f;
-    color: #edf3fb;
+    background: var(--color-selection);
+    color: var(--color-foreground);
   }
 }
