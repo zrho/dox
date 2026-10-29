@@ -4,27 +4,35 @@
   --spacing: 4px;
   --text-xs: 12px;
   --text-sm: 14px;
-  /* Catppuccin Mocha: https://catppuccin.com/palette/ */
-  --color-background: #1e1e2e; /* Base */
-  --color-panel: #181825; /* Mantle */
-  --color-popover: #313244; /* Surface 0 */
-  --color-hover: #313244;
-  --color-selection: #45475a; /* Surface 1 */
-  --color-picker-selection: #45475a;
-  --color-border: #313244;
-  --color-border-strong: #45475a;
-  --color-foreground: #cdd6f4; /* Text */
-  --color-muted: #a6adc8; /* Subtext 0 */
-  --color-subtle: #7f849c; /* Overlay 1 */
-  --color-accent: #cba6f7; /* Mauve */
-  --color-link: #89b4fa; /* Blue */
-  --color-ring: #b4befe; /* Lavender */
-  --color-editor: #cdd6f4;
-  --color-destructive: #f38ba8; /* Red */
-  --color-danger-surface: color-mix(in srgb, #f38ba8 12%, #1e1e2e);
-  --color-warning: #f9e2af; /* Yellow */
-  --color-warning-surface: color-mix(in srgb, #f9e2af 12%, #1e1e2e);
-  --color-crust: #11111b;
+  /* Ayu Light: https://github.com/ayu-theme/ayu-colors/blob/master/themes/light.yaml */
+  --color-background: #f8f9fa;
+  --color-panel: #f8f9fa;
+  --color-chrome: #ebeef0;
+  --color-popover: #ffffff;
+  --color-hover: #6b7d8f24;
+  --color-selection: #6b7d8f24;
+  --color-picker-selection: #6b7d8f24;
+  --color-border: #6b7d8f1f;
+  --color-border-strong: #828e9f59;
+  --color-foreground: #5c6166;
+  --color-muted: #828e9f;
+  --color-subtle: #adaeb1;
+  --color-accent: #f29718;
+  --color-link: #f29718;
+  --color-ring: #f29718;
+  --color-destructive: #e65050;
+  --color-danger-surface: color-mix(in srgb, #e65050 12%, #f8f9fa);
+  --color-warning: #eba400;
+  --color-warning-surface: color-mix(in srgb, #eba400 12%, #f8f9fa);
+  --color-overlay: #6b7d8f;
+  /* Keep document surfaces white and their reading palette independent. */
+  --color-document-background: #ffffff;
+  --color-document-foreground: #303446;
+  --color-document-muted: #626880;
+  --color-document-link: #1e66f5;
+  --color-document-border: #dce0e8;
+  --color-document-border-strong: #acb0be;
+  --color-document-selection: #c9dcfc;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-editor: "JetBrains Mono", ui-monospace, monospace;
   --font-mono: ui-monospace, SFMono-Regular, monospace;
@@ -34,7 +42,8 @@
   :root {
     font-family: var(--font-sans);
     font-size: 13px;
-    color-scheme: dark;
+    color-scheme: light;
+    text-wrap: balance;
     font-synthesis: none;
     background: var(--color-background);
     color: var(--color-foreground);
@@ -55,6 +64,11 @@
   input,
   textarea {
     font: inherit;
+  }
+  pre,
+  code,
+  textarea {
+    text-wrap-style: auto;
   }
   button {
     -webkit-tap-highlight-color: transparent;

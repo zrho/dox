@@ -16,7 +16,7 @@ export default function NoteWorkspace(props: {
   editorRef: (element: HTMLTextAreaElement) => void;
 }) {
   return (
-    <div class="relative min-h-[120px] flex-1 overflow-hidden bg-background">
+    <div class="relative min-h-[120px] flex-1 overflow-hidden bg-document-background">
       <div class="h-full min-h-0 hidden:hidden" hidden={props.mode !== "view"}>
         <NoteView
           html={props.html}
@@ -29,7 +29,7 @@ export default function NoteWorkspace(props: {
       <div class="h-full min-h-0 hidden:hidden" hidden={props.mode !== "edit"}>
         <textarea
           ref={props.editorRef}
-          class="h-full w-full resize-none rounded-none border-0 bg-background px-3 py-2 font-editor leading-[1.5] text-editor outline-none [tab-size:2]"
+          class="h-full w-full resize-none rounded-none border-0 bg-document-background px-3 py-2 font-editor leading-[1.5] text-document-foreground outline-none selection:bg-document-selection selection:text-document-foreground [color-scheme:light] [tab-size:2]"
           style={{ "font-size": `${(13 * props.editorZoom) / 100}px` }}
           aria-label={
             props.note.metadata.type === "literature"

@@ -56,6 +56,14 @@ function titleHtml(note: TitledNote, positions?: number[]) {
       use.getAttribute("href") ?? use.getAttribute("xlink:href") ?? "";
     if (!/^#[A-Za-z0-9_.:-]+$/.test(reference)) use.remove();
   }
+  // Typst's default SVG math colour should follow the surrounding title text,
+  // including selection and match highlighting. Keep explicit colours intact.
+  for (const element of template.content.querySelectorAll("svg [fill], svg [stroke]")) {
+    for (const attribute of ["fill", "stroke"]) {
+      if (element.getAttribute(attribute) === "#cdd6f4")
+        element.setAttribute(attribute, "currentColor");
+    }
+  }
   const matches = new Set(positions ?? []);
   if (matches.size) {
     // Highlight text while preserving compiled SVG and other title markup.

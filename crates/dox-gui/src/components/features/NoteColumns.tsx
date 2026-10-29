@@ -188,7 +188,7 @@ function NoteColumnPanel(props: {
       </div>
       <footer
         aria-label="Item metadata"
-        class="flex h-[22px] shrink-0 items-center gap-3 border-t border-border px-2 text-[10px] text-muted tabular-nums"
+        class="flex h-[22px] shrink-0 items-center gap-3 border-t border-border bg-chrome px-2 text-[10px] text-muted tabular-nums"
       >
         <Show when={note().metadata.date}>
           <time dateTime={note().metadata.date}>{note().metadata.date}</time>

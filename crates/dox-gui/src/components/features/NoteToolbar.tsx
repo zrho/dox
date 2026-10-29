@@ -19,7 +19,7 @@ export default function NoteToolbar(props: {
   return (
     <header
       data-tauri-drag-region={props.titlebar ? "" : undefined}
-      class="flex shrink-0 items-center justify-end border-b border-border px-[10px]"
+      class="flex shrink-0 items-center justify-end border-b border-border bg-chrome px-[10px]"
       classList={{
         "h-10": props.titlebar,
         "pl-[88px]": props.titlebar,

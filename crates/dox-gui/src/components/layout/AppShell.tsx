@@ -41,7 +41,7 @@ export default function AppShell(props: {
       </div>
       <footer
         aria-label="Status bar"
-        class="h-[22px] shrink-0 border-t border-border bg-background"
+        class="h-[22px] shrink-0 border-t border-border bg-chrome"
       />
       {props.overlays}
     </div>
