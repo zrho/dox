@@ -1,0 +1,85 @@
+use dox_core::{Library, LibraryIndex, NoteDocument};
+use std::sync::Mutex;
+use tauri::{Emitter, Manager, State};
+
+#[derive(Default)]
+struct Session {
+    library: Option<Library>,
+    watcher: Option<Box<dyn notify::Watcher + Send>>,
+}
+fn library(state: &State<'_, Mutex<Session>>) -> Result<Library, String> {
+    state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .library
+        .clone()
+        .ok_or_else(|| "Open a library first".into())
+}
+fn error(e: impl std::fmt::Display) -> String {
+    e.to_string()
+}
+#[tauri::command(async)]
+fn open_library(
+    path: String,
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<Session>>,
+) -> Result<String, String> {
+    let lib = Library::init(path).map_err(error)?;
+    let handle = app.clone();
+    let watcher = lib
+        .watch(move || {
+            let _ = handle.emit("library-changed", ());
+        })
+        .map_err(error)?;
+    let root = lib.root().to_string_lossy().into_owned();
+    let mut session = state.lock().map_err(error)?;
+    session.watcher = Some(watcher);
+    session.library = Some(lib);
+    Ok(root)
+}
+#[tauri::command(async)]
+fn list_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
+    library(&state)?.index().map_err(error)
+}
+#[tauri::command(async)]
+fn read_note(id: String, state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
+    library(&state)?.read(&id).map_err(error)
+}
+#[tauri::command(async)]
+fn create_note(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
+    library(&state)?.create_untitled().map_err(error)
+}
+#[tauri::command(async)]
+fn save_note(
+    id: String,
+    source: String,
+    revision: String,
+    state: State<'_, Mutex<Session>>,
+) -> Result<NoteDocument, String> {
+    library(&state)?
+        .save(&id, &source, &revision)
+        .map_err(error)
+}
+#[tauri::command(async)]
+fn render_note(id: String, state: State<'_, Mutex<Session>>) -> Result<String, String> {
+    library(&state)?.render(&id).map_err(error)
+}
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(Mutex::new(Session::default()))
+        .setup(|app| {
+            let _ = app.get_webview_window("main");
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            open_library,
+            list_notes,
+            read_note,
+            create_note,
+            save_note,
+            render_note
+        ])
+        .run(tauri::generate_context!())
+        .expect("Unable to start dox");
+}

@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#d5d8df;background:#1c1e22;font-size:13px;color-scheme:dark;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button,input,textarea{font:inherit}button{cursor:pointer;border:1px solid transparent;border-radius:4px;padding:5px 9px;text-align:left}button:hover{background:#30343c}button:disabled{opacity:.4;cursor:default}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #8caed2;outline-offset:2px}input{width:100%;border:1px solid #363a43;background:#1b1d21;border-radius:5px;padding:8px 10px}kbd{font-size:10px;color:#868d9c;margin-left:9px}.app{display:flex;height:100vh;overflow:hidden}.sidebar{width:254px;flex-shrink:0;background:#202228;border-right:1px solid #33363d;display:flex;flex-direction:column}.brand{height:52px;padding:0 17px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #33363d}.brand strong{font-size:19px;letter-spacing:-1px}.mark{font:italic bold 23px Georgia;color:#adc2dc}.muted{color:#868d9c}.note-list{flex:1;overflow:auto;padding:0 7px}.note-row{display:flex;align-items:center;width:100%;height:24px;padding:0 6px;gap:8px;margin:0;border-radius:3px;font-size:12px;line-height:20px}.note-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.note-id{flex-shrink:0;font:10px ui-monospace,monospace;color:#77808f}.active{background:#303743!important;border-color:#414c5d}.selected{background:#353c47;color:#c7d8ec}.sidebar-footer{height:30px;padding:7px 14px;border-top:1px solid #33363d;color:#8e97a5;font-size:10px;display:flex;align-items:center;gap:7px}.status-dot{width:5px;height:5px;border-radius:50%;background:#93b49e}main{min-width:0;flex:1;display:flex;flex-direction:column}.toolbar{height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #33363d}.breadcrumb{display:flex;gap:12px;color:#929bab;font-size:12px}.breadcrumb span{color:#bec5d0}.breadcrumb .unsaved{color:#d0b486;font-size:10px}.toolbar button{font-size:12px}.primary{background:#bdd0e9!important;color:#202936!important;padding:9px 14px;font-weight:600}.workspace{flex:1;min-height:120px;position:relative}.workspace iframe{width:100%;height:100%;border:0;background:#1c1e22}.editor{width:100%;height:100%;resize:none;border:0;border-radius:0;outline:none!important;background:#1c1e22;padding:28px 34px;color:#c9d4e5;font:13px/1.8 ui-monospace,SFMono-Regular,monospace;tab-size:2}.connections{display:flex;gap:28px;padding:15px 34px 19px;border-top:1px solid #33363d;max-height:145px;overflow:auto}.connections>div{flex:1}.connections h2{font-size:9px;letter-spacing:1.3px;color:#8a95a6;margin:0 0 9px}.connections h2 span{margin-left:7px;color:#626c7c}.connections p{font-size:11px;color:#778190}.connections button{display:block;width:100%;font-size:11px;padding:3px 0}.connections button span{color:#778395;margin-left:12px;font-size:10px}.main-footer{display:flex;justify-content:space-between;height:30px;border-top:1px solid #33363d;color:#7f8998;font-size:10px;padding:7px 18px}.notice{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 18px;background:#393328;color:#e2cc9d;font-size:12px;max-height:200px;overflow:auto}.notice pre{white-space:pre-wrap;margin:0;font:11px/1.5 ui-monospace,monospace}.notice.error{background:#3d282b;color:#efb7bd}.diagnostic{padding:8px 34px;color:#d9b596;background:#302b27;font-size:11px;max-height:150px;overflow:auto}.diagnostic pre{white-space:pre-wrap}
+
+/* Compact library roots and their direct note children share one scroll area. */
+.library-tree{flex:1;min-height:0;overflow:auto;padding:7px 7px 14px}
+.library-root{margin-bottom:8px}
+.library-root-header{display:flex;align-items:center;gap:2px;height:24px}
+.library-root-toggle{display:flex;align-items:center;gap:6px;flex:1;min-width:0;height:24px;padding:0 5px;font-size:12px;line-height:20px;font-weight:500}
+.library-chevron{width:10px;flex-shrink:0;color:#8e99aa;font-size:12px}
+.library-icon{flex-shrink:0;color:#9baac0}
+.library-root-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.library-root-count{margin-left:auto;color:#77808f;font:10px ui-monospace,monospace}
+.library-root-create{flex-shrink:0;height:24px;padding:0 6px;font-size:16px;line-height:20px;color:#b9c1ce}
+.library-root-children{margin-left:10px;padding-left:8px;border-left:1px solid #363c46}
+.library-root-children .note-list{padding:0;overflow:visible}
+.library-root-children .note-row{padding:0 6px}
+
+.open-library-action{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:24px;height:24px;padding:3px;color:#868d9c}
+.open-library-action:hover{color:#c7d8ec}
+
+/* Quick-open stays out of the sidebar until invoked with Command-P. */
+.picker-overlay{position:fixed;inset:0;background:#0005;z-index:20}
+.note-picker{position:fixed;top:14vh;left:50%;transform:translateX(-50%);width:min(560px,calc(100vw - 48px));overflow:hidden;background:#25282e;border:1px solid #454c58;border-radius:7px;box-shadow:0 16px 64px #0009;z-index:21}
+.picker-input-row{display:flex;align-items:center;gap:12px;padding:8px 13px;border-bottom:1px solid #3a404a}
+.picker-input-row .picker-input{min-width:0;padding:5px 0;border:0;border-radius:0;background:transparent;font-size:14px;outline:none}
+.picker-input-row kbd{margin:0;flex-shrink:0;color:#747e8e}
+.picker-results{max-height:min(360px,60vh);overflow-y:auto;overscroll-behavior:contain;padding:4px}
+.picker-result{display:flex;align-items:center;gap:16px;min-height:28px;padding:3px 9px;border-radius:3px;font-size:12px;cursor:pointer}
+.picker-result-selected{background:#354154;color:#e4ebf5}
+.picker-result-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker-result-id{flex-shrink:0;color:#8995a7;font:10px ui-monospace,monospace}
+.picker-match{color:#a9ceff;font-weight:600}
+.picker-empty{padding:12px 9px;color:#8993a2;font-size:12px}
