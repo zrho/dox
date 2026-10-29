@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { isTauri } from "@tauri-apps/api/core";
 import LibraryTree from "../components/features/LibraryTree";
 import NoteToolbar from "../components/features/NoteToolbar";
 import NoteColumns from "../components/features/NoteColumns";
@@ -12,8 +13,10 @@ import AppShell from "../components/layout/AppShell";
 /** The library page composes feature views around one library session. */
 export default function LibraryPage() {
   const app = createLibrarySession();
+  const nativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
   return (
     <AppShell
+      titlebar={nativeTitlebar}
       sidebarVisible={app.sidebarVisible()}
       sidebarRef={app.bindSidebar}
       mainRef={app.bindMain}
@@ -28,6 +31,7 @@ export default function LibraryPage() {
       }
       header={
         <NoteToolbar
+          titlebar={nativeTitlebar}
           note={app.current()?.note}
           mode={app.mode()}
           dirty={app.dirty()}

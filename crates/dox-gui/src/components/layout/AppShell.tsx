@@ -5,13 +5,18 @@ export default function AppShell(props: {
   sidebar: JSX.Element;
   sidebarVisible: boolean;
   header: JSX.Element;
+  titlebar?: boolean;
   overlays?: JSX.Element;
   children: JSX.Element;
   sidebarRef: (element: HTMLElement) => void;
   mainRef: (element: HTMLElement) => void;
 }) {
   return (
-    <div class="flex h-dvh flex-col overflow-hidden border-t border-border bg-background text-foreground">
+    <div
+      class="flex h-dvh flex-col overflow-hidden border-border bg-background text-foreground"
+      classList={{ "border-t": !props.titlebar }}
+    >
+      {props.titlebar && props.header}
       <div class="flex min-h-0 flex-1 overflow-hidden">
         <aside
           ref={props.sidebarRef}
@@ -30,7 +35,7 @@ export default function AppShell(props: {
           tabIndex={-1}
           class="flex min-w-0 flex-1 flex-col bg-background"
         >
-          {props.header}
+          {!props.titlebar && props.header}
           {props.children}
         </main>
       </div>

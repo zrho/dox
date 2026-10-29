@@ -5,18 +5,18 @@ import Tooltip from "../ui/Tooltip";
 const baseStyles = `
 :host{display:block;height:100%;min-height:0;overflow:auto;overscroll-behavior-y:none;background:var(--color-background);color:var(--color-foreground);color-scheme:dark;contain:layout paint style;outline:none}
 *{overscroll-behavior-y:none}
-.note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:14px/1.5 "Libertinus Serif",serif;overflow-wrap:break-word}
+.note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:16px/1.5 "Libertinus Serif",serif;overflow-wrap:break-word}
 h1,h2,h3{line-height:1.25;color:var(--color-foreground);margin:.65em 0 .35em}
-h1{font-size:22px;letter-spacing:-.3px}h2{font-size:18px}h3{font-size:15px}
+h1{font-size:24px;letter-spacing:-.3px}h2{font-size:20px}h3{font-size:17px}
 p{margin:.5em 0}.note-content>:first-child{margin-top:0}
-.literature-fields{width:100%;max-width:840px;border-collapse:collapse;font-size:12px;line-height:1.45;text-align:left;margin-top:12px}
+.literature-fields{width:100%;max-width:840px;border-collapse:collapse;font-size:14px;line-height:1.45;text-align:left;margin-top:12px}
 .literature-fields th,.literature-fields td{padding:4px 10px;border-bottom:1px solid var(--color-border);vertical-align:top}
 .literature-fields tr:first-child>*{border-top:1px solid var(--color-border)}
-.literature-fields th{width:140px;padding-left:0;color:var(--color-muted);font-size:11px;font-weight:500;text-align:right}
+.literature-fields th{width:140px;padding-left:0;color:var(--color-muted);font-size:12px;font-weight:500;text-align:right}
 .literature-fields td{color:var(--color-foreground);white-space:pre-line;overflow-wrap:anywhere}
 @media(max-width:480px){.literature-fields th{width:100px}.literature-fields td{padding-right:0}}
 
-a{color:var(--color-link)}pre,code{font-family:"JetBrains Mono",ui-monospace,monospace}pre{overflow:auto}
+a{color:var(--color-link);text-decoration:none}pre,code{font-family:"JetBrains Mono",ui-monospace,monospace}pre{overflow:auto}
 svg,img{max-width:100%;height:auto}blockquote{border-left:2px solid var(--color-border-strong);padding-left:12px;margin-left:0}
 .dox-display-math{display:flex;justify-content:center;margin:1em 0}
 ::selection{background:var(--color-selection);color:var(--color-foreground)}

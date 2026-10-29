@@ -9,6 +9,7 @@ import Button from "../ui/Button";
 import { commandBinding, type CommandId } from "../../utils/commands";
 import type { Note } from "../../types";
 export default function NoteToolbar(props: {
+  titlebar?: boolean;
   note?: Note;
   mode: "edit" | "view";
   dirty: boolean;
@@ -16,18 +17,21 @@ export default function NoteToolbar(props: {
   onCommand: (id: CommandId) => void;
 }) {
   return (
-    <header class="flex h-7 shrink-0 items-center justify-between border-b border-border px-[10px]">
-      <span class="text-xs text-foreground">{props.note?.id ?? "—"}</span>
+    <header
+      data-tauri-drag-region={props.titlebar ? "" : undefined}
+      class="flex shrink-0 items-center justify-end border-b border-border px-[10px]"
+      classList={{
+        "h-10": props.titlebar,
+        "pl-[88px]": props.titlebar,
+        "select-none": props.titlebar,
+        "h-7": !props.titlebar,
+      }}
+    >
       <Show when={props.note}>
-        <div class="flex items-center gap-1">
-          <Show when={props.mode === "view" && props.note?.metadata.date}>
-            <time
-              class="mr-[6px] text-[10px] text-muted tabular-nums"
-              dateTime={props.note?.metadata.date}
-            >
-              {props.note?.metadata.date}
-            </time>
-          </Show>
+        <div
+          data-tauri-drag-region={props.titlebar ? "" : undefined}
+          class="flex items-center gap-1"
+        >
           <Button
             size="icon"
             selected={props.note?.metadata.pinned === true}
