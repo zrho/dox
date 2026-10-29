@@ -19,7 +19,7 @@ import type {
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
 export function createLibrarySession() {
   const [library, setLibrary] = createSignal("");
-  const [sidebarVisible, setSidebarVisible] = createSignal(true);
+  const [sidebarVisible, setSidebarVisible] = createSignal(false);
   // Reconcile by ID so refreshed JSON updates fields without replacing tree rows.
   const [libraryIndex, updateIndex] = createStore<Index>({
     notes: [],

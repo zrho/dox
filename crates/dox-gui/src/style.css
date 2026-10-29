@@ -39,6 +39,15 @@
     background: var(--color-background);
     color: var(--color-foreground);
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  * {
+    overscroll-behavior-y: none;
+  }
   body {
     margin: 0;
   }

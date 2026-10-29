@@ -1,5 +1,7 @@
 //! Filesystem libraries shared by the desktop app and CLI.
 mod diagnostics;
+mod fuzzy;
+pub use fuzzy::{FuzzyMatch, FuzzyResult, fuzzy_find};
 mod literature;
 use anyhow::{Context, Result, bail, ensure};
 use diagnostics::compiler_diagnostics;
@@ -97,6 +99,8 @@ struct CachedNote {
     failed_fingerprint: Option<String>,
     note: Note,
 }
+const SVG_MATH: &str = include_str!("math-svg.typ");
+
 fn compiler_key() -> String {
     let mut settings = std::env::vars_os()
         .filter(|(key, _)| {
@@ -118,7 +122,7 @@ fn compiler_key() -> String {
         })
     };
     let stamp = executable.and_then(|path| FileStamp::read(path).ok());
-    digest(format!("literature-v3-content-dates:{settings:?}:{stamp:?}").as_bytes())
+    digest(format!("literature-v3-content-dates:{SVG_MATH}:{settings:?}:{stamp:?}").as_bytes())
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -298,7 +302,7 @@ impl Library {
         }
         let relative = doc.strip_prefix(&self.root)?.to_string_lossy();
         let mut wrapper = format!(
-            "#include {}\n",
+            "{SVG_MATH}\n#include {}\n",
             serde_json::to_string(&format!("/{relative}"))?
         );
         if !entries.is_empty() {
@@ -525,7 +529,18 @@ impl Library {
                     }) {
                         self.compile_title(markup, id, &mut diagnostics)
                     } else if heading.exists() {
-                        Ok((heading.inner_html().to_string(), heading.text().to_string()))
+                        Ok((
+                            heading.inner_html().to_string(),
+                            if heading.select("svg").exists() {
+                                // SVG glyphs have no text nodes. Retain heading source
+                                // for search, and compiled prose for computed #title.
+                                heading_source
+                                    .clone()
+                                    .unwrap_or_else(|| heading.text().to_string())
+                            } else {
+                                heading.text().to_string()
+                            },
+                        ))
                     } else {
                         Ok((escape_html(&title), title.clone()))
                     };
@@ -973,6 +988,27 @@ impl Library {
         atomic_write(&path, source.as_bytes())?;
         self.read(id)
     }
+    /// Update pin metadata for any item without rewriting its source.
+    pub fn set_pinned(
+        &self,
+        id: &str,
+        pinned: bool,
+        expected_revision: &str,
+    ) -> Result<NoteDocument> {
+        let current = self.read(id)?;
+        ensure!(
+            current.note.revision == expected_revision,
+            "Conflict: this item changed on disk. Reload it before changing its pin."
+        );
+        let (_, mut metadata) = self.paths(id)?;
+        metadata.fields.insert("pinned".into(), json!(pinned));
+        atomic_write(
+            &self.note_dir(id)?.join("meta.json"),
+            &serde_json::to_vec_pretty(&metadata)?,
+        )?;
+        self.read(id)
+    }
+
     /// Set a Typst note's source date, retaining revision conflict protection.
     pub fn set_date(&self, id: &str, date: &str, expected_revision: &str) -> Result<NoteDocument> {
         ensure!(
@@ -1100,7 +1136,9 @@ impl Library {
             .stderr(Stdio::piped())
             .spawn()
             .context("Could not run Typst for title")?;
-        let source = format!("#html.elem(\"span\", attrs: (\"data-dox-title\": \"\"))[{markup}]\n");
+        let source = format!(
+            "{SVG_MATH}\n#html.elem(\"span\", attrs: (\"data-dox-title\": \"\"))[{markup}]\n"
+        );
         child
             .stdin
             .take()
@@ -1128,7 +1166,14 @@ impl Library {
         let document = HtmlDocument::from(html.as_str());
         let title = document.select_single("[data-dox-title]");
         ensure!(title.exists(), "Compiled title is missing");
-        Ok((title.inner_html().to_string(), title.text().to_string()))
+        Ok((
+            title.inner_html().to_string(),
+            if title.select("svg").exists() {
+                markup.to_owned()
+            } else {
+                title.text().to_string()
+            },
+        ))
     }
 
     pub fn render(&self, id: &str) -> Result<String> {

@@ -3,13 +3,12 @@ import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import Tooltip from "../ui/Tooltip";
 
 const baseStyles = `
-:host{display:block;height:100%;min-height:0;overflow:auto;background:var(--color-background);color:var(--color-foreground);color-scheme:dark;contain:layout paint style;outline:none}
-.note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:14px/1.5 "Spectral",serif;overflow-wrap:break-word}
+:host{display:block;height:100%;min-height:0;overflow:auto;overscroll-behavior-y:none;background:var(--color-background);color:var(--color-foreground);color-scheme:dark;contain:layout paint style;outline:none}
+*{overscroll-behavior-y:none}
+.note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:14px/1.5 "Libertinus Serif",serif;overflow-wrap:break-word}
 h1,h2,h3{line-height:1.25;color:var(--color-foreground);margin:.65em 0 .35em}
 h1{font-size:22px;letter-spacing:-.3px}h2{font-size:18px}h3{font-size:15px}
 p{margin:.5em 0}.note-content>:first-child{margin-top:0}
-/* Typst emits h1 for #title and h2 for a level-one heading. */
-.note-content [data-dox-document-title]{font-size:22px!important;line-height:1.25!important;font-weight:600;letter-spacing:-.3px;margin-top:0}
 .literature-fields{width:100%;max-width:840px;border-collapse:collapse;font-size:12px;line-height:1.45;text-align:left;margin-top:12px}
 .literature-fields th,.literature-fields td{padding:4px 10px;border-bottom:1px solid var(--color-border);vertical-align:top}
 .literature-fields tr:first-child>*{border-top:1px solid var(--color-border)}
@@ -19,6 +18,7 @@ p{margin:.5em 0}.note-content>:first-child{margin-top:0}
 
 a{color:var(--color-link)}pre,code{font-family:"JetBrains Mono",ui-monospace,monospace}pre{overflow:auto}
 svg,img{max-width:100%;height:auto}blockquote{border-left:2px solid var(--color-border-strong);padding-left:12px;margin-left:0}
+.dox-display-math{display:flex;justify-content:center;margin:1em 0}
 ::selection{background:var(--color-selection);color:var(--color-foreground)}
 `;
 // Keep the compiler's MathML/layout CSS within the shadow tree. No stylesheet
@@ -53,9 +53,14 @@ function scopedStyles(document: Document): string {
 /** The compiler's output is untrusted, even when it originates in local files. */
 function prepareNoteHtml(html: string) {
   const parsed = new DOMParser().parseFromString(html, "text/html");
-  // Give both document formats one title scale, leaving subsections unchanged.
+  // The column header displays the document title. Hide its body copy only;
+  // later headings remain part of the note's content.
   const title = parsed.querySelector("h1") ?? parsed.querySelector("h2");
-  title?.setAttribute("data-dox-document-title", "");
+  title?.remove();
+  // Literature titles are also present as a bibliographic field.
+  for (const row of parsed.querySelectorAll(".literature-fields tr")) {
+    if (row.querySelector('th[scope="row"]')?.textContent?.trim() === "Title") row.remove();
+  }
   const fragment = DOMPurify.sanitize(parsed.body.innerHTML, {
     USE_PROFILES: { html: true, mathMl: true, svg: true, svgFilters: true },
     // Typst SVG text uses local glyph references through <use>.
@@ -78,8 +83,11 @@ function prepareNoteHtml(html: string) {
       "audio",
     ],
     FORBID_ATTR: ["autofocus", "contenteditable", "name"],
+    // Extend DOMPurify's default URL policy with dox:. This expression also
+    // validates non-URL attributes: restricting it to URLs strips SVG paths,
+    // transforms, dimensions, and other ordinary attribute values.
     ALLOWED_URI_REGEXP:
-      /^(?:dox:|#|data:image\/(?:png|jpeg|gif|webp|svg\+xml);)/i,
+      /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|dox):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
     RETURN_DOM_FRAGMENT: true,
   });
   for (const use of fragment.querySelectorAll("use")) {

@@ -13,8 +13,20 @@ export function titleText(note: TitledNote) {
 function titleHtml(note: TitledNote, positions?: number[]) {
   const template = document.createElement("template");
   if (note.title_html != null) {
-    template.innerHTML = DOMPurify.sanitize(note.title_html, {
+    // Work in an inert template, then sanitize before displaying anything.
+    // Typst supplies font-relative SVG sizes as CSS; retain only these numeric
+    // dimensions as SVG attributes while discarding all title styles below.
+    template.innerHTML = note.title_html;
+    for (const svg of template.content.querySelectorAll("svg")) {
+      for (const dimension of ["width", "height"] as const) {
+        const size = svg.style[dimension];
+        if (/^(?:\d+(?:\.\d+)?|\.\d+)em$/.test(size))
+          svg.setAttribute(dimension, size);
+      }
+    }
+    template.innerHTML = DOMPurify.sanitize(template.innerHTML, {
       USE_PROFILES: { html: true, mathMl: true, svg: true },
+      ADD_TAGS: ["use"],
       FORBID_TAGS: [
         "style",
         "a",
@@ -39,9 +51,14 @@ function titleHtml(note: TitledNote, positions?: number[]) {
   } else {
     template.content.append(document.createTextNode(titleText(note)));
   }
+  for (const use of template.content.querySelectorAll("use")) {
+    const reference =
+      use.getAttribute("href") ?? use.getAttribute("xlink:href") ?? "";
+    if (!/^#[A-Za-z0-9_.:-]+$/.test(reference)) use.remove();
+  }
   const matches = new Set(positions ?? []);
   if (matches.size) {
-    // Highlight text without replacing the compiled MathML with plain text.
+    // Highlight text while preserving compiled SVG and other title markup.
     const walker = document.createTreeWalker(
       template.content,
       NodeFilter.SHOW_TEXT,
@@ -88,7 +105,7 @@ export default function NoteTitle(props: {
   const html = createMemo(() => titleHtml(props.note, props.positions));
   return (
     <span
-      class="leading-[inherit] [&_math]:text-[1em] [&_math]:[math-style:compact] [&_math[display=block]]:[display:inline_math] [&_p]:m-0 [&_p]:inline [&_svg]:max-h-[1.4em] [&_svg]:max-w-full [&_svg]:align-middle"
+      class="leading-[inherit] [&_math]:text-[1em] [&_math]:[math-style:compact] [&_math[display=block]]:[display:inline_math] [&_p]:m-0 [&_p]:inline [&_svg]:inline-block [&_svg]:max-h-[1.4em] [&_svg]:max-w-full [&_svg]:align-baseline"
       innerHTML={html()}
     />
   );

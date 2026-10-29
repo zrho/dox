@@ -14,6 +14,8 @@ npm run tauri dev
 
 Open the command panel with ⌘⇧P and choose **Open library**, then choose an existing folder or create a folder in the native picker. The **New note** command or ⌘N immediately creates a note and focuses its editor with the `Untitled` heading selected. Type a heading, edit its Typst source, and save with ⌘S. Creating another note saves the current draft first. The eye icon saves the draft and switches to the rendered view; the pencil icon returns to the source. Use ⌘P to fuzzy-find notes by title or ID; use ↑/↓ and Enter to open, or Escape to dismiss. Use the **Copy note link or citation** command to connect an item from another note. Links and backlinks navigate between notes. ⌘B toggles the sidebar from the editor or rendered view. ⌘E toggles edit/view (saving before viewing); ⌘K in the editor opens the fuzzy picker to insert a note link at the cursor. Selected text becomes the link label; otherwise the target title is used. Link labels retain Typst syntax, including math.
 
+The sidebar starts collapsed; use ⌘B to show pinned items. Note columns are at most 520px wide and scroll horizontally with a hidden scrollbar. Viewed content uses bundled Libertinus Serif; source editing uses JetBrains Mono.
+
 The ⌘⇧P command panel fuzzy-finds app commands, shows their assigned keybindings, and supports ↑/↓, Enter, and Escape. Commands unavailable in the current context appear dimmed. Command labels and keybindings are defined centrally in `crates/dox-gui/src/commands.ts`.
 
 To build a macOS app bundle:
@@ -101,13 +103,13 @@ Each item has `meta.json` containing `{"type":"literature","document":"reference
 }
 ```
 
-View mode shows a compact field table with right-aligned labels, including publication type, authors, publication details, identifiers, and any additional BibTeX fields. The title uses the same 22px scale as note titles. Edit mode retains the BibTeX source. The title is derived from the BibTeX `title` field unless explicitly overridden in metadata. Use self-contained entries with braced, quoted, or numeric field values; BibTeX macros, comments outside the entry, and multi-entry imports are not supported by the item reader.
+View mode shows a compact field table with right-aligned labels, including publication type, authors, publication details, identifiers, and any additional BibTeX fields. The title appears in the column header, without a repeated heading or Title row in the body. Edit mode retains the BibTeX source. The title is derived from the BibTeX `title` field unless explicitly overridden in metadata. Use self-contained entries with braced, quoted, or numeric field values; BibTeX macros, comments outside the entry, and multi-entry imports are not supported by the item reader.
 
 In a Typst note, write `@ABC12` (including optional Typst citation supplements), or `#cite(<ABC12>)`. Command-K inserts `@ABC12` when selecting a literature item, replacing the editor selection. The command panel offers **Copy note link or citation**. dox generates a bibliography and compilation wrapper under `.cache` without modifying the note source. The generated bibliography is hidden in the rendered note; citations navigate to literature items and contribute backlinks. Hovering a citation or note link shows the target title in an app tooltip. Invalid BibTeX is reported in diagnostics and cannot be saved through the app; externally broken source remains editable.
 
 ## Math and diagrams
 
-Math renders through Typst's native HTML/MathML output. Wrap paged drawing content in `html.frame` to export it as inline SVG. For example:
+Math renders as inline SVG through Typst’s `html.frame`, including equations in cached titles. The generated wrapper keeps inline equations within paragraphs and display equations as blocks; source files are unchanged. Cached HTML and titles regenerate when the rendering configuration changes. Wrap paged drawing content in `html.frame` to export it as inline SVG. For example:
 
 ```typst
 #import "@preview/fletcher:0.5.8": diagram, node, edge

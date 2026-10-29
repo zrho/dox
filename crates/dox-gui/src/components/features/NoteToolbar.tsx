@@ -16,16 +16,8 @@ export default function NoteToolbar(props: {
   onCommand: (id: CommandId) => void;
 }) {
   return (
-    <header class="flex h-8 shrink-0 items-center justify-between border-b border-border px-[10px]">
-      <div class="flex items-center gap-[7px] text-xs text-muted">
-        notes <span>/</span>
-        <span class="text-foreground">{props.note?.id ?? "—"}</span>
-        <Show when={props.dirty}>
-          <span class="inline-flex items-center text-[10px] leading-none text-warning">
-            ● Unsaved
-          </span>
-        </Show>
-      </div>
+    <header class="flex h-7 shrink-0 items-center justify-between border-b border-border px-[10px]">
+      <span class="text-xs text-foreground">{props.note?.id ?? "—"}</span>
       <Show when={props.note}>
         <div class="flex items-center gap-1">
           <Show when={props.mode === "view" && props.note?.metadata.date}>

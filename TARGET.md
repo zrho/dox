@@ -30,6 +30,7 @@
 
 - Note content and connections
   - Typst is the default writing format, compiled to HTML for viewing.
+  - Render equations as SVG through Typst `html.frame` in both documents and titles, preserving inline/display layout and avoiding nested conversion inside existing diagram frames.
   - Prioritize working math and diagram support, including packages such as CeTZ and Fletcher.
   - HTML output need not reproduce PDF layout exactly.
   - Render sanitized note HTML directly in the app with Shadow DOM style isolation; do not use iframes. Preserve MathML/SVG output and route note links through app navigation.
