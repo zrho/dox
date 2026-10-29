@@ -1,0 +1,160 @@
+# dox
+
+A local notes app for connected mathematical writing. Rust owns the library, metadata, links, filesystem watching, and Typst compilation; the CLI and SolidJS/Tauri desktop app share `dox-core`.
+
+## Run
+
+Requires Rust (edition 2024), Node.js 22+, macOS Command Line Tools, and **Typst 0.14+** on `PATH` with HTML export support. Development is verified with Typst 0.15.1. Install Typst with `brew install typst`. Set `DOX_TYPST` to an executable path if needed; launch the GUI from that environment. Typst is a runtime dependency, not bundled in the app.
+
+```sh
+cd crates/dox-gui
+npm ci
+npm run tauri dev
+```
+
+Open the command panel with ⌘⇧P and choose **Open library**, then choose an existing folder or create a folder in the native picker. The **New note** command or ⌘N immediately creates a note and focuses its editor with the `Untitled` heading selected. Type a heading, edit its Typst source, and save with ⌘S. Creating another note saves the current draft first. The eye icon saves the draft and switches to the rendered view; the pencil icon returns to the source. Use ⌘P to fuzzy-find notes by title or ID; use ↑/↓ and Enter to open, or Escape to dismiss. Use the **Copy note link or citation** command to connect an item from another note. Links and backlinks navigate between notes. ⌘B toggles the sidebar from the editor or rendered view. ⌘E toggles edit/view (saving before viewing); ⌘K in the editor opens the fuzzy picker to insert a note link at the cursor. Selected text becomes the link label; otherwise the target title is used. Link labels retain Typst syntax, including math.
+
+The ⌘⇧P command panel fuzzy-finds app commands, shows their assigned keybindings, and supports ↑/↓, Enter, and Escape. Commands unavailable in the current context appear dimmed. Command labels and keybindings are defined centrally in `crates/dox-gui/src/commands.ts`.
+
+To build a macOS app bundle:
+
+```sh
+cd crates/dox-gui
+npm run tauri build
+```
+
+The output is under `target/release/bundle/macos/`. For a faster local build use `npm run tauri build -- --debug`; output is under `target/debug/bundle/macos/`. Distribution signing and notarization are not configured.
+
+## CLI
+
+Run from the repository root, or install with `cargo install --path crates/dox-cli`.
+
+```sh
+cargo run -p dox-cli -- --library ~/Notes init
+cargo run -p dox-cli -- --library ~/Notes new 'Linear maps' --tags math
+cargo run -p dox-cli -- --library ~/Notes list --tag math
+cargo run -p dox-cli -- --library ~/Notes show ABC12
+cargo run -p dox-cli -- --library ~/Notes render ABC12 > /tmp/note.html
+cargo run -p dox-cli -- --library ~/Notes backlinks ABC12
+cargo run -p dox-cli -- --library ~/Notes watch
+```
+
+Replace `ABC12` with an actual generated ID. `show` returns source, merged metadata, and a revision. `save ABC12 --revision REVISION` reads source from stdin and refuses to overwrite a changed revision. Structured commands emit JSON; `render` emits HTML. `list` also accepts `--search`.
+
+## Library format
+
+```text
+Notes/
+  .gitignore              # ignores /.cache/
+  ABC12/
+    meta.json
+    note.typ
+  .cache/                 # disposable HTML and metadata indexes
+```
+
+Only `type` and `document` are required in `meta.json`. The document path is relative to the note directory. Unknown note types remain readable and indexed; only Typst is rendered initially.
+
+```json
+{
+  "type": "typst",
+  "document": "note.typ",
+  "title": "Linear maps",
+  "tags": ["math"]
+}
+```
+
+Content can supply metadata with a labelled Typst metadata element:
+
+```typst
+#metadata((
+  title: "Linear maps",
+  authors: ("Ada",),
+  tags: ("math", "algebra"),
+  date: "2026-10-29",
+)) <dox>
+
+= Linear maps
+
+$ T(a u + b v) = a T(u) + b T(v) $
+
+#link("dox:XYZ89")[Related idea]
+```
+
+Explicit `meta.json` fields override derived fields, including empty values, except dates: Typst and literature dates come from their source documents. Multiple `<dox>` metadata elements merge in document order. A rendered `#title` (HTML h1) or first level-one heading (HTML h2) supplies the displayed title when metadata does not override it; the ID is the final fallback. Titles may contain Typst markup and math. Compiled title HTML is cached in `.cache/ID/title.html` and the metadata index, and displayed in the tree, note pickers, and backlinks. Plain compiled text and the Typst title source remain available for search and link labels. Metadata title strings are compiled as standalone Typst markup, so document-local definitions are available in heading-derived titles but not metadata overrides. New Typst notes record today’s local date in their source with `#metadata("2026-10-29") <dox-date>`. Edit or remove that command to change or omit the date; the existing `#metadata((date: "2026-10-29")) <dox>` form also works, with `<dox-date>` taking precedence. Dates in `meta.json` no longer supply dates for Typst or literature items. Known dates appear as plain text in the toolbar in view mode only. Undated items have no placeholder or picker. Dates support `YYYY`, `YYYY-MM`, and `YYYY-MM-DD`. The CLI `dox --library ~/Notes date ABC12 2026-10-29 --revision REVISION` updates the source command with revision conflict protection. For literature, edit BibTeX’s `date` field or `year` and optional `month`/`day` fields; partial dates retain their precision. New literature items have no automatic date.
+
+GUI-created notes have minimal metadata and derive their titles from their headings. CLI-created notes have explicit titles and tags; remove those fields from `meta.json` if you want content to own them. Edit metadata externally for now.
+
+Links use `dox:ID`. The compiler resolves links, including computed destinations, for the index. A broken draft remains editable and can retain literal links as a best-effort fallback. Missing targets are retained and reported as dangling-link errors on save/read; malformed `dox:` destinations are reported as invalid-note-link errors. Links emitted through HTML show rules are also checked from compiled HTML. Other web links are currently inert in the note viewer. Literature items use the same generated IDs as citation keys; see below.
+
+## Literature
+
+Open the command panel with ⌘⇧P and choose **New empty literature item** to create a literature item, or run `dox --library ~/Notes literature`. Literature items appear alongside notes in the tree and Command-P picker. Edit their BibTeX source in the app or externally; saving checks the loaded revision as for notes.
+
+Each item has `meta.json` containing `{"type":"literature","document":"reference.bib"}` and a BibTeX file with exactly one entry. Its key must equal the directory’s generated ID:
+
+```bibtex
+@article{ABC12,
+  title = {A paper title},
+  author = {Lovelace, Ada},
+  year = {1843},
+  journal = {Example Journal},
+}
+```
+
+View mode shows a compact field table with right-aligned labels, including publication type, authors, publication details, identifiers, and any additional BibTeX fields. The title uses the same 22px scale as note titles. Edit mode retains the BibTeX source. The title is derived from the BibTeX `title` field unless explicitly overridden in metadata. Use self-contained entries with braced, quoted, or numeric field values; BibTeX macros, comments outside the entry, and multi-entry imports are not supported by the item reader.
+
+In a Typst note, write `@ABC12` (including optional Typst citation supplements), or `#cite(<ABC12>)`. Command-K inserts `@ABC12` when selecting a literature item, replacing the editor selection. The command panel offers **Copy note link or citation**. dox generates a bibliography and compilation wrapper under `.cache` without modifying the note source. The generated bibliography is hidden in the rendered note; citations navigate to literature items and contribute backlinks. Hovering a citation or note link shows the target title in an app tooltip. Invalid BibTeX is reported in diagnostics and cannot be saved through the app; externally broken source remains editable.
+
+## Math and diagrams
+
+Math renders through Typst's native HTML/MathML output. Wrap paged drawing content in `html.frame` to export it as inline SVG. For example:
+
+```typst
+#import "@preview/fletcher:0.5.8": diagram, node, edge
+
+#html.frame[
+  #diagram(
+    node((0, 0), $A$),
+    node((1, 0), $B$),
+    edge((0, 0), (1, 0), "->", $f$),
+  )
+]
+```
+
+This Fletcher example (which uses CeTZ) has been compiled successfully with Typst 0.15.1. First use of an uncached package needs internet access. HTML export remains experimental in Typst; errors appear in the app without discarding source. The viewer renders sanitized HTML/MathML/SVG directly in a Shadow DOM, with no iframe or note scripts. Compiler style rules are scoped to that view; external stylesheet imports and rules targeting the host are discarded. Note links use delegated app navigation, and keyboard shortcuts bubble normally to the app.
+
+## External edits and cache
+
+Native filesystem notifications refresh the library, with a one-second polling fallback where native notifications are unavailable. Clean open notes reload automatically; dirty drafts remain intact and show a conflict notice. Saving checks both source and explicit metadata against the loaded revision. This protects ordinary external-edit conflicts; it is not a cross-process locking protocol for simultaneous writes.
+
+Startup shows the cached note tree (or a lightweight source/metadata listing on first use) and refreshes it in the background. Per-note caches track source/metadata revisions, compiler settings, and the dependency file stamps reported by Typst, including imports and assets. Changing one note does not recompile unrelated notes. Link-target diagnostics are rechecked independently of compilation. Failed compilations are cached until library inputs or compiler settings change. The index computes the library fingerprint once per pass, and per-note locks prevent duplicate concurrent compilation of the same note. Generated HTML and indexes live under `.cache`. Source documents and `meta.json` remain the source of truth. The app adds `/.cache/` and `/.trash/` to the library's `.gitignore`, preserving existing ignore rules. It never initializes or operates Git itself.
+
+## Verify
+
+```sh
+cargo test -p dox-core -p dox-cli
+cargo clippy --workspace --all-targets -- -D warnings
+cd crates/dox-gui
+npm run build
+```
+
+Integration tests require Typst and cover creation, revision conflicts, merged metadata, computed links, math and SVG output, malformed notes, path containment, and external-change watching. AI, advanced reference management, cross-library links, and dedicated Git operations are deferred as specified in `TARGET.md`.
+
+## Deletion and diagnostics
+
+The toolbar trash icon moves the current note into library-local `.trash/`. An unsaved draft is saved first. **Undo** in the status bar restores the last deleted note; older deletions remain in `.trash/` until you manage them manually. Deletion checks the loaded revision, never rewrites incoming links, and leaves Git to record the removed note files. Referencing notes acquire dangling-link diagnostics; restoring a target clears those diagnostics on refresh.
+
+```sh
+dox --library ~/Notes delete ABC12 --revision REVISION
+dox --library ~/Notes restore TRASH_ENTRY
+dox --library ~/Notes diagnostics
+dox --library ~/Notes diagnostics --id ABC12
+```
+
+`delete` returns a JSON object with `id` and `trash_entry`; pass the latter to `restore`. Restoration refuses to overwrite an existing note ID.
+
+Structured diagnostics are available in `note.diagnostics` and `index.diagnostics`. Each diagnostic has a stable ID, `severity` (`error`, `warning`, or `proposal`), `code`, `message`, note/document identity, optional one-based line/column, optional target note, and an `actions` array for future suggested actions. The older `diagnostic` and `warnings` fields remain for compatibility.
+
+Compile failures, invalid note storage, and missing/unreadable link targets are errors. Compiler warnings, unsupported note types, and invalid metadata dates are warnings. The compiler's experimental HTML notice and the deprecation notice for our query invocation are suppressed to avoid repeating infrastructure notices on every note. Proposals and suggested-action descriptions have model/UI support; no AI suggestions or action execution are implemented yet.
+
+The compact diagnostics panel lists saved-file diagnostics across the library, filters by severity, expands compiler details, and opens the originating note in the editor. Source coordinates are used when they refer to that note's document; diagnostics from imported files preserve their file locations in the details. An error dot also marks affected sidebar notes. Broken drafts remain editable, and a compile failure is shown in the panel rather than as a duplicate modal/banner.

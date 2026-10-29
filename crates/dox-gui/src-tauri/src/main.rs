@@ -54,6 +54,10 @@ fn create_note(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String>
     library(&state)?.create_untitled().map_err(error)
 }
 #[tauri::command(async)]
+fn create_literature(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
+    library(&state)?.create_literature().map_err(error)
+}
+#[tauri::command(async)]
 fn save_note(
     id: String,
     source: String,
@@ -62,17 +66,6 @@ fn save_note(
 ) -> Result<NoteDocument, String> {
     library(&state)?
         .save(&id, &source, &revision)
-        .map_err(error)
-}
-#[tauri::command(async)]
-fn set_note_date(
-    id: String,
-    date: String,
-    revision: String,
-    state: State<'_, Mutex<Session>>,
-) -> Result<NoteDocument, String> {
-    library(&state)?
-        .set_date(&id, &date, &revision)
         .map_err(error)
 }
 #[tauri::command(async)]
@@ -108,8 +101,8 @@ fn main() {
             cached_notes,
             read_note,
             create_note,
+            create_literature,
             save_note,
-            set_note_date,
             render_note,
             delete_note,
             restore_note

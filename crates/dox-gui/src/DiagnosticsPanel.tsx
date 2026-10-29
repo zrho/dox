@@ -1,5 +1,6 @@
+import Button from './ui/components/Button';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import NoteInfoPanel from './NoteInfoPanel';
+import NoteInfoPanel from './ui/components/InfoPanel';
 
 export type Severity = 'error' | 'warning' | 'proposal';
 export type Diagnostic = {
@@ -31,11 +32,11 @@ export default function DiagnosticsPanel(props: {
   });
   return <Show when={props.diagnostics.length}>
     <NoteInfoPanel title="DIAGNOSTICS" class="diagnostics-panel" expanded={expanded()} onExpandedChange={setExpanded} actions={
-      <For each={severities}>{severity => <button class={`diagnostic-count severity-${severity}`} aria-pressed={filter() === severity} onClick={() => { setFilter(filter() === severity ? undefined : severity); setExpanded(true); }}>{props.diagnostics.filter(d => d.severity === severity).length} {severity === 'proposal' ? 'proposals' : `${severity}s`}</button>}</For>
+      <For each={severities}>{severity => <Button class={`diagnostic-count severity-${severity}`} aria-pressed={filter() === severity} onClick={() => { setFilter(filter() === severity ? undefined : severity); setExpanded(true); }}>{props.diagnostics.filter(d => d.severity === severity).length} {severity === 'proposal' ? 'proposals' : `${severity}s`}</Button>}</For>
     }>
         <div class="diagnostics-list">
           <For each={visible()}>{diagnostic => <div class={`diagnostic-row severity-${diagnostic.severity}`}>
-            <button class="diagnostic-location" disabled={props.busy || !diagnostic.note_id || !props.noteIds.includes(diagnostic.note_id)} title={diagnostic.document ?? undefined} onClick={() => props.onOpen(diagnostic)}>{diagnostic.note_id ?? 'Library'}{diagnostic.line ? `:${diagnostic.line}` : ''}</button>
+            <Button class="diagnostic-location" disabled={!diagnostic.note_id || !props.noteIds.includes(diagnostic.note_id)} busy={props.busy} title={diagnostic.document ?? undefined} onClick={() => { if (!props.busy) props.onOpen(diagnostic); }}>{diagnostic.note_id ?? 'Library'}{diagnostic.line ? `:${diagnostic.line}` : ''}</Button>
             <details class="diagnostic-detail">
               <summary><span class="diagnostic-code">{diagnostic.code}</span> {diagnostic.message.split('\n')[0]}</summary>
               <pre>{diagnostic.message}</pre>
