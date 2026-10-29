@@ -1,10 +1,14 @@
 import { Dialog } from '@kobalte/core/dialog';
+import FileText from 'lucide-solid/icons/file-text';
+import NoteTitle, { titleText, type TitledNote } from './NoteTitle';
 import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 
-type PickerNote = { id: string; title: string };
+type PickerNote = TitledNote & { id: string };
 type Match = { score: number; positions: number[] };
 type NotePickerProps = {
   open: boolean;
+  mode?: 'open' | 'insert';
+  onCloseAutoFocus?: (event: Event) => void;
   notes: PickerNote[];
   busy: boolean;
   onOpenChange: (open: boolean) => void;
@@ -21,7 +25,8 @@ function fuzzyMatch(text: string, query: string): Match | undefined {
     const positions: number[] = [];
     let cursor = start;
     let score = -start - text.length * 0.01;
-    for (const char of query) {
+    for (let queryIndex = 0; queryIndex < query.length; queryIndex++) {
+      const char = query[queryIndex];
       const found = lower.indexOf(char, cursor);
       if (found < 0) break;
       const previous = positions.at(-1);
@@ -61,11 +66,12 @@ export default function NotePicker(props: NotePickerProps) {
   const results = createMemo(() => {
     const needle = query().trim().toLowerCase().replace(/\s+/g, '');
     return props.notes.flatMap(note => {
-      const title = fuzzyMatch(note.title, needle);
+      const title = fuzzyMatch(titleText(note), needle);
+      const markup = fuzzyMatch(note.title, needle);
       const id = fuzzyMatch(note.id, needle);
-      if (!title && !id) return [];
-      return [{ note, title, id, score: Math.max(title?.score ?? -Infinity, id?.score ?? -Infinity) }];
-    }).sort((a, b) => b.score - a.score || a.note.title.localeCompare(b.note.title) || a.note.id.localeCompare(b.note.id));
+      if (!title && !markup && !id) return [];
+      return [{ note, title, id, score: Math.max(title?.score ?? -Infinity, markup?.score ?? -Infinity, id?.score ?? -Infinity) }];
+    }).sort((a, b) => b.score - a.score || titleText(a.note).localeCompare(titleText(b.note)) || a.note.id.localeCompare(b.note.id));
   });
   createEffect(() => {
     if (props.open) { setQuery(''); setSelected(0); }
@@ -99,26 +105,26 @@ export default function NotePicker(props: NotePickerProps) {
   return <Dialog open={props.open} onOpenChange={props.onOpenChange}>
     <Dialog.Portal>
       <Dialog.Overlay class="picker-overlay"/>
-      <Dialog.Content class="note-picker" onOpenAutoFocus={event => { event.preventDefault(); input?.focus(); }}>
-        <Dialog.Title class="sr-only">Find note</Dialog.Title>
+      <Dialog.Content class="note-picker" onCloseAutoFocus={props.onCloseAutoFocus} onOpenAutoFocus={event => { event.preventDefault(); input?.focus(); }}>
+        <Dialog.Title class="sr-only">{props.mode === 'insert' ? 'Insert note link' : 'Find note'}</Dialog.Title>
         <div class="picker-input-row">
           <input
             ref={input}
             class="picker-input"
-            aria-label="Find note"
+            aria-label={props.mode === 'insert' ? 'Insert note link' : 'Find note'}
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={props.open}
             aria-controls={listId}
             aria-activedescendant={results().length ? `${listId}-${selected()}` : undefined}
-            placeholder="Find note…"
+            placeholder={props.mode === 'insert' ? 'Link to note…' : 'Find note…'}
             autocomplete="off"
             spellcheck={false}
             value={query()}
             onInput={event => setQuery(event.currentTarget.value)}
             onKeyDown={onKey}
           />
-          <kbd>⌘P</kbd>
+          <kbd>{props.mode === 'insert' ? '⌘K' : '⌘P'}</kbd>
         </div>
         <div ref={list} id={listId} class="picker-results" role="listbox" aria-label="Notes" aria-busy={props.busy}>
           <For each={results()}>{(result, index) =>
@@ -134,7 +140,7 @@ export default function NotePicker(props: NotePickerProps) {
               onMouseDown={event => event.preventDefault()}
               onClick={() => choose(index())}
             >
-              <span class="picker-result-title"><MatchText text={result.note.title} positions={result.title?.positions ?? []}/></span>
+              <FileText class="note-icon" size={12} strokeWidth={1.5} aria-hidden="true"/><span class="picker-result-title"><NoteTitle note={result.note} positions={result.title?.positions ?? []}/></span>
               <span class="picker-result-id"><MatchText text={result.note.id} positions={result.id?.positions ?? []}/></span>
             </div>
           }</For>

@@ -1,4 +1,4 @@
-use dox_core::{Library, LibraryIndex, NoteDocument};
+use dox_core::{DeletedNote, Library, LibraryIndex, NoteDocument};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 
@@ -38,6 +38,10 @@ fn open_library(
     Ok(root)
 }
 #[tauri::command(async)]
+fn cached_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
+    library(&state)?.cached_index().map_err(error)
+}
+#[tauri::command(async)]
 fn list_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
     library(&state)?.index().map_err(error)
 }
@@ -61,6 +65,32 @@ fn save_note(
         .map_err(error)
 }
 #[tauri::command(async)]
+fn set_note_date(
+    id: String,
+    date: String,
+    revision: String,
+    state: State<'_, Mutex<Session>>,
+) -> Result<NoteDocument, String> {
+    library(&state)?
+        .set_date(&id, &date, &revision)
+        .map_err(error)
+}
+#[tauri::command(async)]
+fn delete_note(
+    id: String,
+    revision: String,
+    state: State<'_, Mutex<Session>>,
+) -> Result<DeletedNote, String> {
+    library(&state)?.delete(&id, &revision).map_err(error)
+}
+#[tauri::command(async)]
+fn restore_note(
+    trash_entry: String,
+    state: State<'_, Mutex<Session>>,
+) -> Result<NoteDocument, String> {
+    library(&state)?.restore(&trash_entry).map_err(error)
+}
+#[tauri::command(async)]
 fn render_note(id: String, state: State<'_, Mutex<Session>>) -> Result<String, String> {
     library(&state)?.render(&id).map_err(error)
 }
@@ -75,10 +105,14 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             open_library,
             list_notes,
+            cached_notes,
             read_note,
             create_note,
             save_note,
-            render_note
+            set_note_date,
+            render_note,
+            delete_note,
+            restore_note
         ])
         .run(tauri::generate_context!())
         .expect("Unable to start dox");

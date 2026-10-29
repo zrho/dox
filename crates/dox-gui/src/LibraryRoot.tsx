@@ -1,4 +1,8 @@
 import { createSignal, createUniqueId, Show, type JSX } from 'solid-js';
+import ChevronRight from 'lucide-solid/icons/chevron-right';
+import Folder from 'lucide-solid/icons/folder';
+import FolderOpen from 'lucide-solid/icons/folder-open';
+import Plus from 'lucide-solid/icons/plus';
 
 type LibraryRootProps = {
   path: string;
@@ -23,14 +27,14 @@ export default function LibraryRoot(props: LibraryRootProps) {
         title={props.path}
         onClick={() => setExpanded(!expanded())}
       >
-        <span class="library-chevron" aria-hidden="true">{expanded() ? '▾' : '▸'}</span>
-        <svg class="library-icon" aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M3 7V5a1 1 0 0 1 1-1h5l3 3h8a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/>
-        </svg>
+        <ChevronRight class="library-chevron" classList={{ 'is-expanded': expanded() }} size={10} strokeWidth={1.5} aria-hidden="true"/>
+        <Show when={expanded()} fallback={<Folder class="library-icon" size={12} strokeWidth={1.5} aria-hidden="true"/>}>
+          <FolderOpen class="library-icon" size={12} strokeWidth={1.5} aria-hidden="true"/>
+        </Show>
         <span class="library-root-name">{name()}</span>
         <span class="library-root-count">{props.noteCount}</span>
       </button>
-      <button class="library-root-create" aria-label={`Create note in ${name()}`} title="New note" disabled={props.busy} onClick={() => { setExpanded(true); props.onCreate(); }}>+</button>
+      <button class="library-root-create" aria-label={`Create note in ${name()}`} title="New note" disabled={props.busy} onClick={() => { setExpanded(true); props.onCreate(); }}><Plus size={12} strokeWidth={1.5} aria-hidden="true"/></button>
     </div>
     <div id={childrenId} hidden={!expanded()}>
       <Show when={expanded()}><div class="library-root-children">{props.children}</div></Show>
