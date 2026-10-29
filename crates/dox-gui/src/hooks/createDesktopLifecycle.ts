@@ -26,7 +26,7 @@ export function createDesktopLifecycle(options: {
       .onCloseRequested((event) => {
         if (
           options.dirty() &&
-          !window.confirm("Discard the unsaved draft and close dox?")
+          !window.confirm("Discard unsaved drafts and close dox?")
         )
           event.preventDefault();
       })

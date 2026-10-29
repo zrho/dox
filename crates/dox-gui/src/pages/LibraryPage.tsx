@@ -1,8 +1,7 @@
 import { Show } from "solid-js";
 import LibraryTree from "../components/features/LibraryTree";
 import NoteToolbar from "../components/features/NoteToolbar";
-import NoteWorkspace from "../components/features/NoteWorkspace";
-import BacklinksPanel from "../components/features/BacklinksPanel";
+import NoteColumns from "../components/features/NoteColumns";
 import DiagnosticsPanel from "../components/features/DiagnosticsPanel";
 import { CommandPicker, NotePicker } from "../components/features/AppPickers";
 import Button from "../components/ui/Button";
@@ -75,28 +74,19 @@ export default function LibraryPage() {
           This note changed on disk. Your draft is preserved.
         </Alert>
       </Show>
-      <Show
-        when={!!app.current()}
-        fallback={<div class="min-h-[120px] flex-1 bg-background" />}
-      >
-        <NoteWorkspace
-          note={app.current()!.note}
-          mode={app.mode()}
-          source={app.source()}
-          html={app.html()}
-          editorZoom={app.editorZoom()}
-          viewZoom={app.viewZoom()}
-          onSourceChange={app.setSource}
-          onNavigate={app.openNote}
-          getNoteTitle={app.getNoteTitle}
-          editorRef={app.bindEditor}
-        />
-        <BacklinksPanel
-          notes={app.backlinks()}
-          busy={app.busy()}
-          onOpen={app.openNote}
-        />
-      </Show>
+      <NoteColumns
+        columns={app.columns()}
+        activeKey={app.activeKey()}
+        notes={app.index().notes}
+        busy={app.busy()}
+        onActivate={app.activateColumn}
+        onClose={app.closeColumn}
+        onNavigate={app.openLinked}
+        onSourceChange={app.setColumnSource}
+        getNoteTitle={app.getNoteTitle}
+        bindEditor={app.bindEditor}
+        unbindEditor={app.unbindEditor}
+      />
       <DiagnosticsPanel
         diagnostics={app.index().diagnostics}
         noteIds={app.index().notes.map((note) => note.id)}

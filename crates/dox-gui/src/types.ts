@@ -45,3 +45,14 @@ export type DeletedNote = {
   id: string;
   trash_entry: string;
 };
+
+export type NoteColumn = {
+  key: number;
+  document: Document;
+  source: string;
+  html: string;
+  mode: "edit" | "view";
+  external: boolean;
+  editorZoom: number;
+  viewZoom: number;
+};

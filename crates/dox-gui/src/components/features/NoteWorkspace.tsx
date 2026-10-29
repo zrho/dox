@@ -6,6 +6,8 @@ export default function NoteWorkspace(props: {
   mode: "edit" | "view";
   source: string;
   html: string;
+  active?: boolean;
+  readOnly?: boolean;
   editorZoom: number;
   viewZoom: number;
   onSourceChange: (source: string) => void;
@@ -19,7 +21,7 @@ export default function NoteWorkspace(props: {
         <NoteView
           html={props.html}
           zoom={props.viewZoom}
-          active={props.mode === "view"}
+          active={props.mode === "view" && props.active !== false}
           getNoteTitle={props.getNoteTitle}
           onNavigate={props.onNavigate}
         />
@@ -34,6 +36,7 @@ export default function NoteWorkspace(props: {
               ? "BibTeX source"
               : "Typst source"
           }
+          readOnly={props.readOnly}
           spellcheck={false}
           value={props.source}
           onInput={(event) => props.onSourceChange(event.currentTarget.value)}

@@ -8,7 +8,14 @@ import {
   type UICommand,
 } from "../utils/commands";
 import { titleText } from "../components/features/NoteTitle";
-import type { Note, Document, Index, DeletedNote, Diagnostic } from "../types";
+import type {
+  Note,
+  Document,
+  Index,
+  DeletedNote,
+  Diagnostic,
+  NoteColumn,
+} from "../types";
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
 export function createLibrarySession() {
   const [library, setLibrary] = createSignal("");
@@ -27,22 +34,109 @@ export function createLibrarySession() {
       }),
     );
   }
-  const [current, setCurrent] = createSignal<Document>();
-  const [source, setSource] = createSignal("");
-  const [mode, setMode] = createSignal<"edit" | "view">("view");
-  const [editorZoom, setEditorZoom] = createSignal(100);
-  const [viewZoom, setViewZoom] = createSignal(100);
-  function zoomContent(change: number | "reset") {
-    const setZoom = mode() === "edit" ? setEditorZoom : setViewZoom;
-    setZoom((value) =>
-      change === "reset" ? 100 : Math.max(50, Math.min(250, value + change)),
+  const [workspace, setWorkspace] = createStore<{ columns: NoteColumn[] }>({
+    columns: [],
+  });
+  const [activeKey, setActiveKey] = createSignal<number>();
+  let nextColumnKey = 0;
+  const columns = () => workspace.columns;
+  const activeColumn = () =>
+    columns().find((column) => column.key === activeKey());
+  const current = () => activeColumn()?.document;
+  const source = () => activeColumn()?.source ?? "";
+  const mode = () => activeColumn()?.mode ?? "view";
+  const html = () => activeColumn()?.html ?? "";
+  const editorZoom = () => activeColumn()?.editorZoom ?? 100;
+  const viewZoom = () => activeColumn()?.viewZoom ?? 100;
+  const external = () => activeColumn()?.external ?? false;
+  const editors = new Map<number, HTMLTextAreaElement>();
+  const editor = () =>
+    activeKey() === undefined ? undefined : editors.get(activeKey()!);
+  function updateColumn(key: number, patch: Partial<NoteColumn>) {
+    setWorkspace("columns", (column) => column.key === key, patch);
+  }
+  function updateActive(patch: Partial<NoteColumn>) {
+    const key = activeKey();
+    if (key !== undefined) updateColumn(key, patch);
+  }
+  const setCurrent = (document: Document) => updateActive({ document });
+  const setSource = (source: string) => updateActive({ source });
+  const setMode = (mode: "view" | "edit") => updateActive({ mode });
+  const setHtml = (html: string) => updateActive({ html });
+  const setExternal = (external: boolean) => updateActive({ external });
+  function addColumn(
+    document: Document,
+    html: string,
+    mode: "view" | "edit" = "view",
+    prefix = columns().length,
+  ) {
+    const column: NoteColumn = {
+      key: ++nextColumnKey,
+      document,
+      source: document.source,
+      html,
+      mode,
+      external: false,
+      editorZoom: editorZoom(),
+      viewZoom: viewZoom(),
+    };
+    const kept = columns().slice(0, prefix);
+    for (const old of columns().slice(prefix)) editors.delete(old.key);
+    batch(() => {
+      setWorkspace("columns", [...kept, column]);
+      setActiveKey(column.key);
+    });
+    queueMicrotask(focusActive);
+    return column.key;
+  }
+  function focusActive() {
+    if (mode() === "edit") editor()?.focus();
+    else main?.focus();
+  }
+  const columnDirty = (column: NoteColumn) =>
+    column.source !== column.document.source;
+  const anyDirty = () => columns().some(columnDirty);
+  function confirmDiscard(removed: NoteColumn[]) {
+    return (
+      !removed.some(columnDirty) ||
+      window.confirm("Discard unsaved drafts in the columns being closed?")
     );
   }
-  const [html, setHtml] = createSignal("");
+  function activateColumn(key: number) {
+    if (!busy() && columns().some((column) => column.key === key))
+      setActiveKey(key);
+  }
+  function removeColumn(key: number) {
+    const position = columns().findIndex((column) => column.key === key);
+    const remaining = columns().filter((column) => column.key !== key);
+    editors.delete(key);
+    batch(() => {
+      setWorkspace("columns", remaining);
+      if (activeKey() === key)
+        setActiveKey(remaining[Math.min(position, remaining.length - 1)]?.key);
+    });
+  }
+  function closeColumn(key: number) {
+    if (busy()) return;
+    const column = columns().find((column) => column.key === key);
+    if (!column || !confirmDiscard([column])) return;
+    removeColumn(key);
+    queueMicrotask(() => {
+      if (mode() === "edit") editor()?.focus();
+      else main?.focus();
+    });
+  }
+  function zoomContent(change: number | "reset") {
+    const field = mode() === "edit" ? "editorZoom" : "viewZoom";
+    const value = activeColumn()?.[field] ?? 100;
+    updateActive({
+      [field]:
+        change === "reset" ? 100 : Math.max(50, Math.min(250, value + change)),
+    });
+  }
   const [error, setError] = createSignal("");
   const [lastDeleted, setLastDeleted] = createSignal<DeletedNote>();
   const [busy, setBusy] = createSignal(false);
-  const [external, setExternal] = createSignal(false);
   const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const [pickerMode, setPickerMode] = createSignal<"open" | "insert">("open");
@@ -50,12 +144,8 @@ export function createLibrarySession() {
   const pinnedNotes = createMemo(() =>
     index().notes.filter((note) => note.metadata.pinned === true),
   );
-  const backlinks = createMemo(() =>
-    index().notes.filter((n) => n.links.includes(current()?.note.id ?? "")),
-  );
   let sidebar: HTMLElement | undefined;
   let main: HTMLElement | undefined;
-  let editor: HTMLTextAreaElement | undefined;
   let pendingLink:
     | {
         noteId: string;
@@ -92,7 +182,7 @@ export function createLibrarySession() {
     setSidebarVisible(!hiding);
     if (moveFocus)
       queueMicrotask(() => {
-        if (mode() === "edit" && editor?.isConnected) editor.focus();
+        if (mode() === "edit" && editor()?.isConnected) editor()!.focus();
         else main?.focus();
       });
   }
@@ -108,10 +198,9 @@ export function createLibrarySession() {
     ++request;
     setLibrary(root);
     setLastDeleted(undefined);
-    setCurrent(undefined);
-    setSource("");
-    setHtml("");
-    setExternal(false);
+    setWorkspace("columns", []);
+    setActiveKey(undefined);
+    editors.clear();
     setIndex({ notes: [], warnings: [], diagnostics: [] });
     localStorage.setItem("dox.library", root);
     setIndex(await invoke<Index>("cached_notes"));
@@ -120,28 +209,50 @@ export function createLibrarySession() {
       if (library() === root) setError(String(error));
     });
   }
-  async function load(id: string, force = false) {
-    if (
-      !force &&
-      dirty() &&
-      !window.confirm("Discard the unsaved draft and open this note?")
-    )
-      return;
-    const token = ++request;
-    const doc = await invoke<Document>("read_note", { id });
-    if (token !== request) return;
-    // Prepare the next view before replacing the current document.
-    const rendered =
-      mode() === "view" && !doc.note.diagnostic
+  async function readColumn(id: string, columnMode: "view" | "edit" = "view") {
+    const document = await invoke<Document>("read_note", { id });
+    const html =
+      columnMode === "view" && !document.note.diagnostic
         ? await invoke<string>("render_note", { id })
         : "";
+    return { document, html };
+  }
+  async function load(id: string, force = false) {
+    const existing = columns().find((column) => column.document.note.id === id);
+    if (existing && !force) {
+      setActiveKey(existing.key);
+      queueMicrotask(focusActive);
+      return;
+    }
+    if (!force && !confirmDiscard(columns())) return;
+    const token = ++request;
+    const result = await readColumn(
+      id,
+      force && existing ? existing.mode : "view",
+    );
     if (token !== request) return;
-    batch(() => {
-      setCurrent(doc);
-      setSource(doc.source);
-      setExternal(false);
-      setHtml(rendered);
-    });
+    if (force && existing) {
+      updateColumn(existing.key, {
+        ...result,
+        source: result.document.source,
+        external: false,
+      });
+    } else addColumn(result.document, result.html, "view", 0);
+  }
+  async function openLinked(id: string, fromKey: number) {
+    const from = columns().findIndex((column) => column.key === fromKey);
+    if (from < 0) return;
+    const existing = columns().find((column) => column.document.note.id === id);
+    if (existing) {
+      setActiveKey(existing.key);
+      queueMicrotask(focusActive);
+      return;
+    }
+    if (!confirmDiscard(columns().slice(from + 1))) return;
+    const token = ++request;
+    const result = await readColumn(id);
+    if (token === request)
+      addColumn(result.document, result.html, "view", from + 1);
   }
   async function preview(id: string, token = request) {
     if (current()?.note.id === id && current()?.note.diagnostic) {
@@ -153,8 +264,8 @@ export function createLibrarySession() {
   }
   async function chooseLibrary() {
     if (
-      dirty() &&
-      !window.confirm("Discard the unsaved draft and switch libraries?")
+      anyDirty() &&
+      !window.confirm("Discard unsaved drafts and switch libraries?")
     )
       return;
     const path = await open({
@@ -221,24 +332,19 @@ export function createLibrarySession() {
     if (!current()) return;
     if (dirty()) await save();
     const id = current()!.note.id;
-    const position = index().notes.findIndex((note) => note.id === id);
     ++indexRequest;
     const deleted = await invoke<DeletedNote>("delete_note", {
       id,
       revision: current()!.note.revision,
     });
     ++request;
-    setCurrent(undefined);
-    setSource("");
-    setHtml("");
-    setExternal(false);
+    const column = columns().find((column) => column.document.note.id === id);
+    if (column) removeColumn(column.key);
     setPickerOpen(false);
     pendingLink = undefined;
     editPosition = undefined;
     setLastDeleted(deleted);
     await refresh();
-    const next = index().notes[Math.min(position, index().notes.length - 1)];
-    if (next) await load(next.id, true);
   }
   async function undoDelete() {
     const deleted = lastDeleted();
@@ -253,29 +359,28 @@ export function createLibrarySession() {
         ? await invoke<string>("render_note", { id: doc.note.id })
         : "";
     ++request;
-    batch(() => {
-      setCurrent(doc);
-      setSource(doc.source);
-      setHtml(rendered);
-      setExternal(false);
-      setLastDeleted(undefined);
-    });
+    const existing = columns().find(
+      (column) => column.document.note.id === doc.note.id,
+    );
+    if (existing) {
+      updateColumn(existing.key, {
+        document: doc,
+        source: doc.source,
+        html: rendered,
+      });
+      setActiveKey(existing.key);
+    } else addColumn(doc, rendered, mode());
+    setLastDeleted(undefined);
     await refresh();
   }
   async function openDiagnostic(diagnostic: Diagnostic) {
     if (!diagnostic.note_id) return;
-    if (current()?.note.id !== diagnostic.note_id) {
-      const previousMode = mode();
-      setMode("edit");
+    if (current()?.note.id !== diagnostic.note_id)
       await load(diagnostic.note_id);
-      if (current()?.note.id !== diagnostic.note_id) {
-        setMode(previousMode);
-        return;
-      }
-    }
+    if (current()?.note.id !== diagnostic.note_id) return;
     edit();
     queueMicrotask(() => {
-      if (!editor) return;
+      if (!editor()) return;
       let position = 0;
       const ownDocument = current()?.note.metadata.document;
       const notePath = `${current()?.note.id}/${ownDocument}`;
@@ -300,10 +405,11 @@ export function createLibrarySession() {
           source().indexOf(`dox:${diagnostic.target_note_id}`),
         );
       }
-      editor.focus();
-      editor.setSelectionRange(position, position);
-      const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
-      editor.scrollTop = Math.max(
+      editor()!.focus();
+      editor()!.setSelectionRange(position, position);
+      const lineHeight =
+        parseFloat(getComputedStyle(editor()!).lineHeight) || 20;
+      editor()!.scrollTop = Math.max(
         0,
         (source().slice(0, position).split("\n").length - 3) * lineHeight,
       );
@@ -311,12 +417,12 @@ export function createLibrarySession() {
   }
   async function view() {
     if (!current()) return;
-    if (mode() === "edit" && editor && current()) {
+    if (mode() === "edit" && editor() && current()) {
       editPosition = {
         noteId: current()!.note.id,
-        start: editor.selectionStart,
-        end: editor.selectionEnd,
-        scrollTop: editor.scrollTop,
+        start: editor()!.selectionStart,
+        end: editor()!.selectionEnd,
+        scrollTop: editor()!.scrollTop,
       };
     }
     if (dirty()) await save();
@@ -328,14 +434,14 @@ export function createLibrarySession() {
     if (!current()) return;
     setMode("edit");
     queueMicrotask(() => {
-      editor?.focus();
+      editor()?.focus();
       if (
-        editor &&
+        editor() &&
         editPosition &&
         editPosition.noteId === current()?.note.id
       ) {
-        editor.setSelectionRange(editPosition.start, editPosition.end);
-        editor.scrollTop = editPosition.scrollTop;
+        editor()!.setSelectionRange(editPosition.start, editPosition.end);
+        editor()!.scrollTop = editPosition.scrollTop;
       }
     });
   }
@@ -356,15 +462,15 @@ export function createLibrarySession() {
       busy() ||
       !current() ||
       mode() !== "edit" ||
-      !editor ||
-      document.activeElement !== editor
+      !editor() ||
+      document.activeElement !== editor()
     )
       return;
     pendingLink = {
       noteId: current()!.note.id,
       source: source(),
-      start: editor.selectionStart,
-      end: editor.selectionEnd,
+      start: editor()!.selectionStart,
+      end: editor()!.selectionEnd,
     };
     setPickerMode("insert");
     setPickerOpen(true);
@@ -412,14 +518,14 @@ export function createLibrarySession() {
     queueMicrotask(() => {
       const selection = pendingLink;
       if (
-        editor &&
+        editor() &&
         selection &&
         mode() === "edit" &&
         selection.noteId === current()?.note.id &&
         source() === selection.source
       ) {
-        editor.focus();
-        editor.setSelectionRange(selection.start, selection.end);
+        editor()!.focus();
+        editor()!.setSelectionRange(selection.start, selection.end);
       }
       pendingLink = undefined;
     });
@@ -431,20 +537,16 @@ export function createLibrarySession() {
       kind === "literature" ? "create_literature" : "create_note",
     );
     ++request;
-    setCurrent(doc);
-    setSource(doc.source);
-    setMode("edit");
-    setHtml("");
-    setExternal(false);
+    addColumn(doc, "", "edit");
     setIndex((previous) => ({
       ...previous,
       notes: [doc.note, ...previous.notes],
     }));
     // The heading is ready to replace; typing starts without another click.
     queueMicrotask(() => {
-      editor?.focus();
+      editor()?.focus();
       const start = doc.source.indexOf("Untitled");
-      editor?.setSelectionRange(start, start + 8);
+      editor()?.setSelectionRange(start, start + 8);
     });
     await refresh();
   }
@@ -470,7 +572,7 @@ export function createLibrarySession() {
     edit,
     view,
     insert: () => {
-      editor?.focus();
+      editor()?.focus();
       openLinkPicker();
     },
     copy: copyReference,
@@ -554,30 +656,47 @@ export function createLibrarySession() {
   }
   async function syncFromDisk() {
     await refresh();
-    const active = current();
-    if (!active) return;
-    if (!index().notes.some((note) => note.id === active.note.id) && !dirty()) {
-      ++request;
-      setCurrent(undefined);
-      setSource("");
-      setHtml("");
-      setExternal(false);
-      return;
+    const root = library();
+    for (const snapshot of [...columns()]) {
+      if (root !== library()) return;
+      if (
+        !index().notes.some((note) => note.id === snapshot.document.note.id)
+      ) {
+        if (columnDirty(snapshot))
+          updateColumn(snapshot.key, { external: true });
+        else removeColumn(snapshot.key);
+        continue;
+      }
+      const document = await invoke<Document>("read_note", {
+        id: snapshot.document.note.id,
+      });
+      let column = columns().find((column) => column.key === snapshot.key);
+      if (!column) continue;
+      if (columnDirty(column)) {
+        updateColumn(column.key, {
+          external: document.note.revision !== column.document.note.revision,
+        });
+        continue;
+      }
+      const html =
+        column.mode === "view" && !document.note.diagnostic
+          ? await invoke<string>("render_note", { id: document.note.id })
+          : column.html;
+      column = columns().find((column) => column.key === snapshot.key);
+      if (!column || columnDirty(column) || root !== library()) continue;
+      updateColumn(column.key, {
+        document,
+        source: document.source,
+        html,
+        external: false,
+      });
     }
-    const disk = await invoke<Document>("read_note", { id: active.note.id });
-    if (dirty()) {
-      setExternal(disk.note.revision !== active.note.revision);
-      return;
-    }
-    if (disk.note.revision !== active.note.revision)
-      await load(active.note.id, true);
-    else if (mode() === "view") await preview(active.note.id);
   }
   createDesktopLifecycle({
-    dirty,
+    dirty: anyDirty,
     busy,
     modalOpen: () => pickerOpen() || commandPanelOpen(),
-    editorFocused: () => document.activeElement === editor,
+    editorFocused: () => document.activeElement === editor(),
     onChange: () => run(syncFromDisk),
     onCommand: executeCommand,
     onRestoreLibrary: (path) => run(() => openLibrary(path)),
@@ -588,6 +707,11 @@ export function createLibrarySession() {
     pinnedNotes,
     sidebarVisible,
     index,
+    columns,
+    activeKey,
+    activateColumn,
+    closeColumn,
+    columnDirty,
     current,
     source,
     mode,
@@ -602,7 +726,6 @@ export function createLibrarySession() {
     pickerOpen,
     pickerMode,
     dirty,
-    backlinks,
     commands,
     setSource,
     setCommandPanelOpen,
@@ -610,6 +733,11 @@ export function createLibrarySession() {
     executeCommand,
     selectNote,
     pickerCloseFocus,
+    openLinked: (id: string, fromKey: number) => {
+      void run(() => openLinked(id, fromKey));
+    },
+    setColumnSource: (key: number, source: string) =>
+      updateColumn(key, { source }),
     openNote: (id: string) => {
       void run(() => load(id));
     },
@@ -634,8 +762,11 @@ export function createLibrarySession() {
     bindMain: (element: HTMLElement) => {
       main = element;
     },
-    bindEditor: (element: HTMLTextAreaElement) => {
-      editor = element;
+    bindEditor: (key: number, element: HTMLTextAreaElement) => {
+      editors.set(key, element);
+    },
+    unbindEditor: (key: number) => {
+      editors.delete(key);
     },
   };
 }
