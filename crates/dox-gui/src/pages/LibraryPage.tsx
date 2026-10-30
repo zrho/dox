@@ -97,6 +97,9 @@ export default function LibraryPage() {
         onActivate={app.activateColumn}
         onMove={app.moveColumn}
         onClose={app.closeColumn}
+        onAttach={app.attachFiles}
+        onOpenAttachment={app.openAttachment}
+        onRemoveAttachment={app.removeAttachment}
         onNavigate={app.openLinked}
         onSourceChange={app.setColumnSource}
         getNoteTitle={app.getNoteTitle}

@@ -12,6 +12,7 @@ import Button from "../ui/Button";
 import NoteTitle, { titleText } from "./NoteTitle";
 import NoteWorkspace from "./NoteWorkspace";
 import BacklinksPanel from "./BacklinksPanel";
+import AttachmentsPanel from "./AttachmentsPanel";
 import { createColumnDrag } from "../../hooks/createColumnDrag";
 import type { Note, NoteColumn } from "../../types";
 
@@ -27,6 +28,9 @@ export default function NoteColumns(props: {
   onActivate: (key: number) => void;
   onMove: (key: number, index: number) => void;
   onClose: (key: number) => void;
+  onAttach: (id: string) => void;
+  onOpenAttachment: (id: string, name: string) => void;
+  onRemoveAttachment: (id: string, name: string) => void;
   onNavigate: (id: string, fromKey: number) => void;
   onSourceChange: (key: number, source: string) => void;
   getNoteTitle: (id: string) => string | undefined;
@@ -94,6 +98,9 @@ export default function NoteColumns(props: {
               notes={props.notes}
               onActivate={() => props.onActivate(column.key)}
               onClose={() => props.onClose(column.key)}
+              onAttach={() => props.onAttach(column.document.note.id)}
+              onOpenAttachment={(name) => props.onOpenAttachment(column.document.note.id, name)}
+              onRemoveAttachment={(name) => props.onRemoveAttachment(column.document.note.id, name)}
               onDragStart={(event) => drag.start(column.key, event)}
               onDragMove={drag.move}
               onDragEnd={drag.end}
@@ -123,6 +130,9 @@ function NoteColumnPanel(props: {
   notes: Note[];
   onActivate: () => void;
   onClose: () => void;
+  onAttach: () => void;
+  onOpenAttachment: (name: string) => void;
+  onRemoveAttachment: (name: string) => void;
   onDragStart: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => void;
   onDragMove: (event: PointerEvent) => void;
   onDragEnd: (event: PointerEvent) => void;
@@ -227,6 +237,13 @@ function NoteColumnPanel(props: {
           notes={backlinks()}
           busy={props.busy}
           onOpen={props.onNavigate}
+        />
+        <AttachmentsPanel
+          attachments={props.column.document.attachments}
+          busy={props.busy}
+          onAttach={props.onAttach}
+          onOpen={props.onOpenAttachment}
+          onRemove={props.onRemoveAttachment}
         />
       </div>
       <footer

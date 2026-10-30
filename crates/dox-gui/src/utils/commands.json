@@ -41,6 +41,9 @@
   "open-library": {
     "title": "Open library"
   },
+  "attach-files": {
+    "title": "Attach files to item"
+  },
   "save": {
     "title": "Save note",
     "binding": {

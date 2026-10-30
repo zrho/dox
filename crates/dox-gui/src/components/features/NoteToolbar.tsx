@@ -5,6 +5,7 @@ import Pencil from "lucide-solid/icons/pencil";
 import Eye from "lucide-solid/icons/eye";
 import Save from "lucide-solid/icons/save";
 import Trash from "lucide-solid/icons/trash";
+import Paperclip from "lucide-solid/icons/paperclip";
 import Button from "../ui/Button";
 import { commandBinding, type CommandId } from "../../utils/commands";
 import type { Note } from "../../types";
@@ -32,6 +33,14 @@ export default function NoteToolbar(props: {
           data-tauri-drag-region={props.titlebar ? "" : undefined}
           class="flex items-center gap-1"
         >
+          <Button
+            size="icon"
+            aria-label="Attach files"
+            busy={props.busy}
+            onClick={() => props.onCommand("attach-files")}
+          >
+            <Paperclip size={14} strokeWidth={1.5} aria-hidden="true" />
+          </Button>
           <Button
             size="icon"
             selected={props.note?.metadata.pinned === true}

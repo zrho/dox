@@ -23,6 +23,12 @@ enum Action {
     },
     /// Create an editable single-entry BibTeX literature item.
     Literature,
+    /// List files attached to any item.
+    Attachments { id: String },
+    /// Copy a file into an item's attachments directory.
+    Attach { id: String, path: PathBuf },
+    /// Remove an attached copy from the library.
+    RemoveAttachment { id: String, name: String },
     /// List notes and rebuild cached metadata.
     List {
         #[arg(long)]
@@ -77,6 +83,12 @@ fn main() -> Result<()> {
         Action::Init => unreachable!(),
         Action::New { title, tags } => serde_json::to_value(lib.create(&title, tags)?)?,
         Action::Literature => serde_json::to_value(lib.create_literature()?)?,
+        Action::Attachments { id } => serde_json::to_value(lib.attachments(&id)?)?,
+        Action::Attach { id, path } => serde_json::to_value(lib.attach_file(&id, path)?)?,
+        Action::RemoveAttachment { id, name } => {
+            lib.remove_attachment(&id, &name)?;
+            serde_json::Value::Null
+        }
         Action::List { tag, search } => {
             let mut index = lib.index()?;
             index.notes.retain(|n| {

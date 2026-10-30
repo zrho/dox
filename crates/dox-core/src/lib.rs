@@ -1,5 +1,7 @@
 //! Filesystem libraries shared by the desktop app and CLI.
+mod attachments;
 mod compiler;
+pub use attachments::Attachment;
 mod diagnostics;
 mod fuzzy;
 pub use fuzzy::{FuzzyMatch, FuzzyResult, fuzzy_find};
@@ -55,6 +57,8 @@ pub struct Note {
 pub struct NoteDocument {
     pub note: Note,
     pub source: String,
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryIndex {
@@ -375,6 +379,7 @@ impl Library {
                 return Ok(NoteDocument {
                     note: entry.note,
                     source,
+                    attachments: self.attachments(id)?,
                 });
             }
         }
@@ -658,7 +663,11 @@ impl Library {
         };
         fs::create_dir_all(&cache)?;
         atomic_write(&cache.join("metadata.json"), &serde_json::to_vec(&entry)?)?;
-        Ok(NoteDocument { note, source })
+        Ok(NoteDocument {
+            note,
+            source,
+            attachments: self.attachments(id)?,
+        })
     }
     fn refresh_link_diagnostics(&self, note: &mut Note, source: &str) {
         note.diagnostics
@@ -888,6 +897,7 @@ impl Library {
                             merged_metadata.fields.insert("date".into(), json!(today));
                         }
                         Ok(NoteDocument {
+                            attachments: vec![],
                             note: Note {
                                 id: id.clone(),
                                 metadata: merged_metadata,

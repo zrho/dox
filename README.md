@@ -59,6 +59,8 @@ Notes/
   ABC12/
     meta.json
     note.typ
+    attachments/           # optional files copied into the item
+      paper.pdf
   .cache/                 # disposable HTML and metadata indexes
 ```
 
@@ -116,6 +118,20 @@ Each item has `meta.json` containing `{"type":"literature","document":"reference
 View mode shows a compact field table with right-aligned labels, including publication type, authors, publication details, identifiers, and any additional BibTeX fields. When present, the abstract appears as reading text below the table. The title appears in the column header, without a repeated heading or Title row in the body. Edit mode retains the BibTeX source. The title is derived from the BibTeX `title` field unless explicitly overridden in metadata. Use self-contained entries with braced, quoted, or numeric field values; BibTeX macros, comments outside the entry, and multi-entry imports are not supported by the item reader.
 
 In a Typst note, write `@ABC12` (including optional Typst citation supplements), or `#cite(<ABC12>)`. Command-K inserts `@ABC12` when selecting a literature item, replacing the editor selection. Command-Shift-K inserts the publication title followed by `@ABC12`; special Typst characters in the title are escaped. Both shortcuts insert ordinary links when choosing notes. The command panel offers **Copy note link or citation**. dox generates a bibliography and compilation wrapper under `.cache` without modifying the note source. The generated bibliography is hidden in the rendered note; citations navigate to literature items and contribute backlinks. Hovering a citation or note link shows the target title in an app tooltip. Invalid BibTeX is reported in diagnostics and cannot be saved through the app; externally broken source remains editable.
+
+## Attachments
+
+Any item, including a literature item, can have file attachments. Click the paperclip in the toolbar or choose **Attach files to item** in the command panel, then select one or more files. Files are copied into the item's `attachments/` directory; the originals stay where they are. Duplicate filenames receive a numbered suffix, such as `paper (2).pdf`, without overwriting existing files.
+
+Items with attachments show a collapsible **ATTACHMENTS** panel beneath backlinks in both edit and view modes. Click a filename to open it in the system's default application (for example, Preview for PDFs). The panel's plus button attaches more files, and its remove button asks before deleting the library's copy. Attaching or removing files preserves unsaved source edits. Files added or removed externally also refresh in the panel. Attachments move with the item when it is deleted or restored.
+
+Attachments are ordinary files, with no manifest or metadata changes required. Supported filenames are single UTF-8 path components; subdirectories and symlinks are not listed or opened as attachments. Temporary import files are hidden until copying finishes. The core validates attachment paths before opening or removing them. The CLI also supports:
+
+```sh
+dox --library ~/Notes attach ABC12 ~/Downloads/paper.pdf
+dox --library ~/Notes attachments ABC12
+dox --library ~/Notes remove-attachment ABC12 paper.pdf
+```
 
 ## Math and diagrams
 

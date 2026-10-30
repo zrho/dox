@@ -36,6 +36,11 @@ export type Note = {
 export type Document = {
   note: Note;
   source: string;
+  attachments: Attachment[];
+};
+export type Attachment = {
+  name: string;
+  size: number;
 };
 export type Index = {
   notes: Note[];

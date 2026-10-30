@@ -30,6 +30,7 @@
   - Leave room for future note types, multiple libraries, and cross-library references qualified by a library ID.
 
 - Note content and connections
+  - Support file attachments for all item types. Copy files into each item's `attachments/` directory, preserve filenames with collision suffixes, and show a collapsible panel beneath backlinks. Open attachments in the system's default app and confirm removal of the library's copy; keep unsaved source edits intact. Include attachments when deleting/restoring an item and refresh externally changed files.
   - Typst is the default writing format, compiled to HTML for viewing.
   - Render equations as SVG through Typst `html.frame` in both documents and titles, preserving inline/display layout and avoiding nested conversion inside existing diagram frames.
   - Prioritize working math and diagram support, including packages such as CeTZ and Fletcher.

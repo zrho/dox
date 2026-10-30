@@ -16,6 +16,7 @@ import type {
   Diagnostic,
   NoteColumn,
   NotePickerMode,
+  Attachment,
 } from "../types";
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
 const defaultZoom = { editorZoom: 100, viewZoom: 90 };
@@ -350,6 +351,33 @@ export function createLibrarySession() {
     }));
     await refresh();
   }
+  async function refreshAttachments(id: string) {
+    const attachments = await invoke<Attachment[]>("list_attachments", { id });
+    for (const column of columns().filter((column) => column.document.note.id === id)) {
+      // Update attachments independently of the saved source and any editor draft.
+      updateColumn(column.key, { document: { ...column.document, attachments } });
+    }
+  }
+  async function attachFiles(id: string) {
+    const paths = await open({ multiple: true, title: "Attach files" });
+    if (!paths?.length) return;
+    try {
+      await invoke<void>("attach_files", { id, paths });
+    } finally {
+      // Earlier files may already have been copied if a later one failed.
+      await refreshAttachments(id);
+    }
+  }
+  async function removeAttachment(id: string, name: string) {
+    if (!(await confirm(`Remove “${name}” from this item? This deletes the attached copy in the library.`, {
+      title: "Remove attachment",
+      kind: "warning",
+      okLabel: "Remove attachment",
+      cancelLabel: "Cancel",
+    }))) return;
+    await invoke<void>("remove_attachment", { id, name });
+    await refreshAttachments(id);
+  }
   async function togglePin() {
     const active = current();
     if (!active) return;
@@ -654,6 +682,10 @@ export function createLibrarySession() {
       setPublicationImportOpen(true);
     },
     "open-library": chooseLibrary,
+    "attach-files": async () => {
+      const id = current()?.note.id;
+      if (id) await attachFiles(id);
+    },
     save,
     "toggle-mode": toggleMode,
     edit,
@@ -774,6 +806,7 @@ export function createLibrarySession() {
       if (!column) continue;
       if (columnDirty(column)) {
         updateColumn(column.key, {
+          document: { ...column.document, attachments: document.attachments },
           external: document.note.revision !== column.document.note.revision,
         });
         continue;
@@ -813,6 +846,13 @@ export function createLibrarySession() {
     activateColumn,
     moveColumn,
     closeColumn,
+    attachFiles: (id: string) => { void run(() => attachFiles(id)); },
+    openAttachment: (id: string, name: string) => {
+      void run(() => invoke<void>("open_attachment", { id, name }));
+    },
+    removeAttachment: (id: string, name: string) => {
+      void run(() => removeAttachment(id, name));
+    },
     columnDirty,
     current,
     source,

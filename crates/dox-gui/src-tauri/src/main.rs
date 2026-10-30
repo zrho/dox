@@ -1,4 +1,4 @@
-use dox_core::{DeletedNote, Library, LibraryIndex, NoteDocument};
+use dox_core::{Attachment, DeletedNote, Library, LibraryIndex, NoteDocument};
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{Emitter, Manager, State};
 
@@ -176,6 +176,56 @@ async fn render_note(
 ) -> Result<String, String> {
     with_library(window, state, move |library| library.render(&id)).await
 }
+#[tauri::command]
+async fn list_attachments(
+    id: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<Vec<Attachment>, String> {
+    with_library(window, state, move |library| library.attachments(&id)).await
+}
+#[tauri::command]
+async fn attach_files(
+    id: String,
+    paths: Vec<String>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<(), String> {
+    with_library(window, state, move |library| {
+        for path in paths {
+            library
+                .attach_file(&id, &path)
+                .map_err(|error| format!("Could not attach {path}: {error:#}"))?;
+        }
+        Ok::<_, String>(())
+    })
+    .await
+}
+#[tauri::command]
+async fn open_attachment(
+    id: String,
+    name: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<(), String> {
+    with_library(window, state, move |library| {
+        let path = library.attachment_path(&id, &name).map_err(error)?;
+        tauri_plugin_opener::open_path(path, None::<&str>).map_err(error)
+    })
+    .await
+}
+#[tauri::command]
+async fn remove_attachment(
+    id: String,
+    name: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<(), String> {
+    with_library(window, state, move |library| {
+        library.remove_attachment(&id, &name)
+    })
+    .await
+}
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -199,6 +249,10 @@ fn main() {
             save_note,
             set_note_pinned,
             render_note,
+            list_attachments,
+            attach_files,
+            open_attachment,
+            remove_attachment,
             delete_note,
             restore_note
         ])
