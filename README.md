@@ -18,7 +18,11 @@ The sidebar starts collapsed; use ⌘B to show pinned items. Note columns are at
 
 On macOS, toolbar actions share the native title-bar area with the traffic lights. Each note column has a compact footer below backlinks, showing its ID and date when known in both edit and view modes. Drag empty space in that row to move the window, or double-click it to use the system title-bar action. Changes to native window configuration require restarting the desktop app.
 
-The ⌘⇧P command panel fuzzy-finds app commands, shows their assigned keybindings, and supports ↑/↓, Enter, and Escape. Commands unavailable in the current context appear dimmed. Command labels and keybindings are defined centrally in `crates/dox-gui/src/commands.ts`.
+The desktop app enables [`tauri-plugin-macos-fps`](https://github.com/userFRM/tauri-plugin-macos-fps) to allow rendering at the display’s native refresh rate on macOS. The plugin uses a private WebKit API and is unsuitable for Mac App Store distribution.
+
+On macOS, closing the last window keeps the app running. Click its Dock icon to open a window again. **File → New window**, ⌘⇧N, or the command panel creates another window, restoring the most recently used library. Each window has its own open library, panes, and drafts; switching libraries in one window leaves the others intact. Quit the app with ⌘Q.
+
+The ⌘⇧P command panel fuzzy-finds app commands, shows their assigned keybindings, and supports ↑/↓, Enter, and Escape. Commands unavailable in the current context appear dimmed. Command labels and keybindings are defined centrally in `crates/dox-gui/src/utils/commands.json`, shared with the native menu.
 
 To build a macOS app bundle:
 

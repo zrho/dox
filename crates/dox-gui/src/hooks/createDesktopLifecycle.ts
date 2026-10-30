@@ -1,5 +1,4 @@
 import { onMount, onCleanup } from "solid-js";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   commandDefinitions,
@@ -26,7 +25,7 @@ export function createDesktopLifecycle(options: {
       .onCloseRequested((event) => {
         if (
           options.dirty() &&
-          !window.confirm("Discard unsaved drafts and close dox?")
+          !window.confirm("Discard unsaved drafts and close this window?")
         )
           event.preventDefault();
       })
@@ -45,7 +44,7 @@ export function createDesktopLifecycle(options: {
         void options.onChange();
       }, 350);
     };
-    listen("library-changed", changed)
+    getCurrentWindow().listen("library-changed", changed)
       .then((fn) => {
         if (stopped) fn();
         else unlisten = fn;

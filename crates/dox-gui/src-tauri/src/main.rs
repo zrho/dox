@@ -1,18 +1,21 @@
 use dox_core::{DeletedNote, Library, LibraryIndex, NoteDocument};
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 use tauri::{Emitter, Manager, State};
 
-#[derive(Default)]
+mod windows;
+
 struct Session {
-    library: Option<Library>,
-    watcher: Option<Box<dyn notify::Watcher + Send>>,
+    library: Library,
+    _watcher: Box<dyn notify::Watcher + Send>,
 }
-fn library(state: &State<'_, Mutex<Session>>) -> Result<Library, String> {
+type Sessions = Mutex<HashMap<String, Session>>;
+
+fn library(state: &State<'_, Sessions>, window: &tauri::WebviewWindow) -> Result<Library, String> {
     state
         .lock()
         .map_err(|e| e.to_string())?
-        .library
-        .clone()
+        .get(window.label())
+        .map(|session| session.library.clone())
         .ok_or_else(|| "Open a library first".into())
 }
 fn error(e: impl std::fmt::Display) -> String {
@@ -25,14 +28,15 @@ fn fuzzy_find(query: String, candidates: Vec<Vec<String>>) -> Vec<dox_core::Fuzz
 // Embedded compilation and blocking package downloads belong on worker threads,
 // including dropping an old compiler when switching libraries.
 async fn with_library<T, E>(
-    state: State<'_, Mutex<Session>>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
     action: impl FnOnce(Library) -> Result<T, E> + Send + 'static,
 ) -> Result<T, String>
 where
     T: Send + 'static,
     E: std::fmt::Display + Send + 'static,
 {
-    let library = library(&state)?;
+    let library = library(&state, &window)?;
     tauri::async_runtime::spawn_blocking(move || {
         action(library).map_err(|error| format!("{error:#}"))
     })
@@ -40,69 +44,109 @@ where
     .map_err(error)?
 }
 #[tauri::command]
-async fn open_library(path: String, app: tauri::AppHandle) -> Result<String, String> {
+async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let lib = Library::init(path).map_err(error)?;
-        let handle = app.clone();
+        let handle = window.clone();
         let watcher = lib
             .watch(move || {
-                let _ = handle.emit("library-changed", ());
+                let _ = handle.emit_to(handle.label(), "library-changed", ());
             })
             .map_err(error)?;
         let root = lib.root().to_string_lossy().into_owned();
-        let state = app.state::<Mutex<Session>>();
-        let mut session = state.lock().map_err(error)?;
-        session.watcher = Some(watcher);
-        session.library = Some(lib);
+        let state = window.state::<Sessions>();
+        let mut sessions = state.lock().map_err(error)?;
+        // A library can finish opening after its window has been closed.
+        if window
+            .app_handle()
+            .get_webview_window(window.label())
+            .is_none()
+        {
+            return Err("Window was closed".into());
+        }
+        let previous = sessions.insert(
+            window.label().into(),
+            Session {
+                _watcher: watcher,
+                library: lib,
+            },
+        );
+        drop(sessions);
+        drop(previous);
         Ok(root)
     })
     .await
     .map_err(error)?
 }
 #[tauri::command]
-async fn cached_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
-    with_library(state, |library| library.cached_index()).await
+async fn cached_notes(
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<LibraryIndex, String> {
+    with_library(window, state, |library| library.cached_index()).await
 }
 #[tauri::command]
-async fn list_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
-    with_library(state, |library| library.index()).await
+async fn list_notes(
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<LibraryIndex, String> {
+    with_library(window, state, |library| library.index()).await
 }
 #[tauri::command]
-async fn read_note(id: String, state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
-    with_library(state, move |library| library.read(&id)).await
+async fn read_note(
+    id: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<NoteDocument, String> {
+    with_library(window, state, move |library| library.read(&id)).await
 }
 #[tauri::command]
-async fn create_note(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
-    with_library(state, |library| library.create_untitled()).await
+async fn create_note(
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<NoteDocument, String> {
+    with_library(window, state, |library| library.create_untitled()).await
 }
 #[tauri::command]
-async fn create_literature(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
-    with_library(state, |library| library.create_literature()).await
+async fn create_literature(
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<NoteDocument, String> {
+    with_library(window, state, |library| library.create_literature()).await
 }
 #[tauri::command]
 async fn import_publication(
     input: String,
-    state: State<'_, Mutex<Session>>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(state, move |library| library.import_publication(&input)).await
+    with_library(window, state, move |library| {
+        library.import_publication(&input)
+    })
+    .await
 }
 #[tauri::command]
 async fn save_note(
     id: String,
     source: String,
     revision: String,
-    state: State<'_, Mutex<Session>>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(state, move |library| library.save(&id, &source, &revision)).await
+    with_library(window, state, move |library| {
+        library.save(&id, &source, &revision)
+    })
+    .await
 }
 #[tauri::command]
 async fn set_note_pinned(
     id: String,
     pinned: bool,
     revision: String,
-    state: State<'_, Mutex<Session>>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(state, move |library| {
+    with_library(window, state, move |library| {
         library.set_pinned(&id, pinned, &revision)
     })
     .await
@@ -111,30 +155,39 @@ async fn set_note_pinned(
 async fn delete_note(
     id: String,
     revision: String,
-    state: State<'_, Mutex<Session>>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
 ) -> Result<DeletedNote, String> {
-    with_library(state, move |library| library.delete(&id, &revision)).await
+    with_library(window, state, move |library| library.delete(&id, &revision)).await
 }
 #[tauri::command]
 async fn restore_note(
     trash_entry: String,
-    state: State<'_, Mutex<Session>>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(state, move |library| library.restore(&trash_entry)).await
+    with_library(window, state, move |library| library.restore(&trash_entry)).await
 }
 #[tauri::command]
-async fn render_note(id: String, state: State<'_, Mutex<Session>>) -> Result<String, String> {
-    with_library(state, move |library| library.render(&id)).await
+async fn render_note(
+    id: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<String, String> {
+    with_library(window, state, move |library| library.render(&id)).await
 }
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(Mutex::new(Session::default()))
+        .plugin(tauri_plugin_macos_fps::init())
+        .manage(Sessions::default())
         .setup(|app| {
-            let _ = app.get_webview_window("main");
+            #[cfg(target_os = "macos")]
+            windows::setup_menu(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            windows::new_window,
             fuzzy_find,
             open_library,
             list_notes,
@@ -149,6 +202,19 @@ fn main() {
             delete_note,
             restore_note
         ])
-        .run(tauri::generate_context!())
-        .expect("Unable to start dox");
+        .build(tauri::generate_context!())
+        .expect("Unable to start dox")
+        .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Destroyed,
+                ..
+            } = &event
+            {
+                let session = app.state::<Sessions>().lock().unwrap().remove(label);
+                // Dropping an embedded compiler can block too.
+                tauri::async_runtime::spawn_blocking(move || drop(session));
+            }
+            windows::handle_event(app, event);
+        });
 }

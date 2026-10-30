@@ -1,0 +1,111 @@
+{
+  "commands": {
+    "title": "Show command panel",
+    "binding": {
+      "key": "p",
+      "shift": true
+    }
+  },
+  "find": {
+    "title": "Find note",
+    "binding": {
+      "key": "p"
+    }
+  },
+  "close": {
+    "title": "Close focused pane",
+    "binding": {
+      "key": "escape",
+      "primary": false
+    }
+  },
+  "new-note": {
+    "title": "New note",
+    "binding": {
+      "key": "n"
+    }
+  },
+  "new-window": {
+    "title": "New window",
+    "binding": {
+      "key": "n",
+      "shift": true
+    }
+  },
+  "new-literature": {
+    "title": "New empty literature item"
+  },
+  "import-publication": {
+    "title": "Import publication from link or tag"
+  },
+  "open-library": {
+    "title": "Open library"
+  },
+  "save": {
+    "title": "Save note",
+    "binding": {
+      "key": "s"
+    }
+  },
+  "toggle-mode": {
+    "title": "Toggle edit/view",
+    "binding": {
+      "key": "e"
+    }
+  },
+  "edit": {
+    "title": "Edit source"
+  },
+  "view": {
+    "title": "View note"
+  },
+  "insert": {
+    "title": "Insert link or citation",
+    "binding": {
+      "key": "k"
+    }
+  },
+  "insert-with-title": {
+    "title": "Insert link or citation with title",
+    "binding": {
+      "key": "k",
+      "shift": true
+    }
+  },
+  "copy": {
+    "title": "Copy note link or citation"
+  },
+  "toggle-sidebar": {
+    "title": "Toggle sidebar",
+    "binding": {
+      "key": "b"
+    }
+  },
+  "zoom-in": {
+    "title": "Zoom in content",
+    "binding": {
+      "key": "="
+    }
+  },
+  "zoom-out": {
+    "title": "Zoom out content",
+    "binding": {
+      "key": "-"
+    }
+  },
+  "zoom-reset": {
+    "title": "Reset content zoom",
+    "binding": {
+      "key": "0"
+    }
+  },
+  "toggle-pin": {
+    "title": "Toggle pin"
+  },
+  "delete": {
+    "title": "Delete note"
+  },
+  "undo-delete": {
+    "title": "Undo last note deletion"
+  }
+}

@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "dox",
+    "productName": "Dox",
     "version": "0.1.0",
     "identifier": "app.dox.desktop",
     "build": {
@@ -26,6 +26,11 @@
         ],
         "security": {
             "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'none'; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420"
+        }
+    },
+    "plugins": {
+        "macos-fps": {
+            "enabled": true
         }
     },
     "bundle": {

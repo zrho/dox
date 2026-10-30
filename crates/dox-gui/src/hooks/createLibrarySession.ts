@@ -18,6 +18,7 @@ import type {
   NotePickerMode,
 } from "../types";
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
+const defaultZoom = { editorZoom: 100, viewZoom: 90 };
 export function createLibrarySession() {
   const [library, setLibrary] = createSignal("");
   const [sidebarVisible, setSidebarVisible] = createSignal(false);
@@ -48,8 +49,8 @@ export function createLibrarySession() {
   const source = () => activeColumn()?.source ?? "";
   const mode = () => activeColumn()?.mode ?? "view";
   const html = () => activeColumn()?.html ?? "";
-  const editorZoom = () => activeColumn()?.editorZoom ?? 100;
-  const viewZoom = () => activeColumn()?.viewZoom ?? 100;
+  const editorZoom = () => activeColumn()?.editorZoom ?? defaultZoom.editorZoom;
+  const viewZoom = () => activeColumn()?.viewZoom ?? defaultZoom.viewZoom;
   const external = () => activeColumn()?.external ?? false;
   const editors = new Map<number, HTMLTextAreaElement>();
   const editor = () =>
@@ -148,10 +149,10 @@ export function createLibrarySession() {
   }
   function zoomContent(change: number | "reset") {
     const field = mode() === "edit" ? "editorZoom" : "viewZoom";
-    const value = activeColumn()?.[field] ?? 100;
+    const value = activeColumn()?.[field] ?? defaultZoom[field];
     updateActive({
       [field]:
-        change === "reset" ? 100 : Math.max(50, Math.min(250, value + change)),
+        change === "reset" ? defaultZoom[field] : Math.max(50, Math.min(250, value + change)),
     });
   }
   const [error, setError] = createSignal("");
@@ -638,6 +639,9 @@ export function createLibrarySession() {
     find: openPicker,
     close: closeFocused,
     "new-note": () => create(),
+    "new-window": () => {
+      void invoke<void>("new_window").catch((error) => setError(String(error)));
+    },
     "new-literature": () => create("literature"),
     "import-publication": () => {
       setPublicationImportOpen(true);
@@ -671,6 +675,7 @@ export function createLibrarySession() {
     "undo-delete": undoDelete,
   };
   function commandEnabled(id: CommandId) {
+    if (id === "new-window") return true;
     if (id === "zoom-in" || id === "zoom-out" || id === "zoom-reset")
       return !!current();
     if (busy()) return false;
@@ -722,6 +727,7 @@ export function createLibrarySession() {
     if (
       [
         "commands",
+        "new-window",
         "import-publication",
         "find",
         "insert",
