@@ -15,17 +15,31 @@ export default function Dialog(props: {
   onCloseAutoFocus?: (event: Event) => void;
   onEscapeKeyDown?: (event: KeyboardEvent) => void;
 }) {
+  let previousFocus: HTMLElement | undefined;
+  const onOpenAutoFocus = (event: Event) => {
+    let focused = document.activeElement;
+    while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+    previousFocus = focused instanceof HTMLElement ? focused : undefined;
+    props.onOpenAutoFocus?.(event);
+  };
+  const onCloseAutoFocus = (event: Event) => {
+    props.onCloseAutoFocus?.(event);
+    // These dialogs open from commands rather than Dialog.Trigger. Restore the
+    // actual previous element, unless a caller or a new view already took focus.
+    if (event.defaultPrevented) return;
+    event.preventDefault();
+    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+  };
   return (
     <Primitive open={props.open} onOpenChange={props.onOpenChange}>
       <Primitive.Portal>
-        <Primitive.Overlay class="fixed inset-0 z-20 bg-overlay/20" />
         <Primitive.Content
           class={cn(
             "fixed top-[14vh] left-1/2 z-21 w-[min(560px,calc(100vw_-_48px))] -translate-x-1/2 overflow-hidden rounded-[7px] border border-border-strong bg-popover shadow-[0_16px_64px] shadow-overlay/15",
             props.class,
           )}
-          onOpenAutoFocus={props.onOpenAutoFocus}
-          onCloseAutoFocus={props.onCloseAutoFocus}
+          onOpenAutoFocus={onOpenAutoFocus}
+          onCloseAutoFocus={onCloseAutoFocus}
           onEscapeKeyDown={(event) => {
             event.stopPropagation();
             props.onEscapeKeyDown?.(event);

@@ -116,7 +116,14 @@ fn compiler_key() -> String {
         })
         .collect::<Vec<_>>();
     settings.sort();
-    digest(format!("{}:{SVG_MATH}:{settings:?}", compiler::VERSION).as_bytes())
+    digest(
+        format!(
+            "{}:{}:{SVG_MATH}:{settings:?}",
+            compiler::VERSION,
+            literature::CACHE_KEY
+        )
+        .as_bytes(),
+    )
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -259,8 +266,10 @@ impl Library {
             if let Ok((path, meta)) = self.paths(&key) {
                 if meta.kind == "literature" {
                     if let Ok(source) = fs::read_to_string(path) {
-                        if literature::parse(&source, &key).is_ok() {
-                            entries.push((key, source));
+                        if let Ok(entry) = literature::parse(&source, &key) {
+                            // Expand per-item macros so definitions from separate
+                            // files cannot collide in the shared bibliography.
+                            entries.push((key, entry.to_biblatex_string()));
                         }
                     }
                 }
@@ -424,12 +433,12 @@ impl Library {
 
         if explicit.kind == "literature" {
             match literature::parse(&source, id) {
-                Ok(fields) => {
-                    if let Some(date) = literature::date(&fields) {
+                Ok(entry) => {
+                    if let Some(date) = literature::date(&entry) {
                         metadata.fields.insert("date".into(), json!(date));
                     }
                     for key in ["title", "author", "year", "doi", "url"] {
-                        if let Some(value) = fields.get(key) {
+                        if let Some(value) = literature::field(&entry, key) {
                             metadata
                                 .fields
                                 .entry(key.to_owned())
@@ -737,7 +746,7 @@ impl Library {
                     if metadata.kind == "literature" {
                         return literature::parse(&source, &id)
                             .ok()
-                            .and_then(|fields| fields.get("title").cloned());
+                            .and_then(|entry| literature::field(&entry, "title"));
                     }
                     source
                         .lines()
@@ -834,8 +843,8 @@ impl Library {
     /// reference and return a warning, so callers can offer a retry.
     pub fn import_publication(&self, input: &str) -> Result<PublicationImport> {
         let bibtex = publication::lookup(input)?;
-        let fields = literature::parse(&bibtex, "IMPORT")?;
-        let pdf = publication_pdf::PdfSource::from_fields(&fields);
+        let entry = literature::parse(&bibtex, "IMPORT")?;
+        let pdf = publication_pdf::PdfSource::from_entry(&entry);
         let mut document = self.create_inner(None, vec![], "literature", Some(&bibtex))?;
         let mut warnings = vec![];
         if let Some(pdf) = pdf {

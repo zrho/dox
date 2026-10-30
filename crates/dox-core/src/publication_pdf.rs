@@ -2,11 +2,11 @@
 //! Provider dispatch lives here; attachment storage stays independent of sources.
 use crate::{Attachment, Library, PublicationIdentifier, literature, publication};
 use anyhow::{Context, Result, bail, ensure};
+use biblatex::Entry;
 use publication::{ARXIV_NS, ATOM};
 use reqwest::Url;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
     fs,
     io::{Read, Seek, SeekFrom},
     time::Duration,
@@ -18,37 +18,36 @@ pub(crate) enum PdfSource {
 }
 
 impl PdfSource {
-    pub(crate) fn from_fields(fields: &BTreeMap<String, String>) -> Option<Self> {
+    pub(crate) fn from_entry(entry: &Entry) -> Option<Self> {
         let arxiv = |value: &str| match PublicationIdentifier::parse(value).ok()? {
             PublicationIdentifier::Arxiv(id) => Some(Self::Arxiv(id)),
             _ => None,
         };
         for key in ["arxiv", "arxivid", "arxiv_id"] {
-            if let Some(pdf) = fields.get(key).and_then(|value| arxiv(value)) {
+            if let Some(pdf) = literature::field(entry, key).and_then(|value| arxiv(&value)) {
                 return Some(pdf);
             }
         }
-        let archive = fields
-            .get("archiveprefix")
-            .or_else(|| fields.get("eprinttype"));
+        let archive = entry.eprint_type().ok();
+        let archive = archive.map(|chunks| biblatex::ChunksExt::format_verbatim(chunks));
         if archive.is_none_or(|archive| archive.trim().eq_ignore_ascii_case("arxiv")) {
-            if let Some(pdf) = fields.get("eprint").and_then(|value| arxiv(value)) {
+            if let Some(pdf) = entry.eprint().ok().and_then(|value| arxiv(&value)) {
                 return Some(pdf);
             }
         }
         for key in ["url", "doi"] {
-            if let Some(pdf) = fields.get(key).and_then(|value| arxiv(value)) {
+            if let Some(pdf) = literature::field(entry, key).and_then(|value| arxiv(&value)) {
                 return Some(pdf);
             }
         }
         None
     }
 
-    fn find(fields: &BTreeMap<String, String>) -> Result<Self> {
-        if let Some(pdf) = Self::from_fields(fields) {
+    fn find(entry: &Entry) -> Result<Self> {
+        if let Some(pdf) = Self::from_entry(entry) {
             return Ok(pdf);
         }
-        if let Some(id) = search_arxiv(fields)? {
+        if let Some(id) = search_arxiv(entry)? {
             return Ok(Self::Arxiv(id));
         }
         bail!(
@@ -144,29 +143,21 @@ fn text(node: roxmltree::Node<'_, '_>, namespace: &str, name: &str) -> String {
 /// Search by title using the documented arXiv API fields, then prefer exact DOI
 /// matches. Otherwise require an exact title and an author surname when known;
 /// ambiguous matches are rejected.
-fn search_arxiv(fields: &BTreeMap<String, String>) -> Result<Option<String>> {
-    let title = fields
-        .get("title")
-        .map(|value| normalized(value))
-        .unwrap_or_default();
-    let expected_doi = fields.get("doi").and_then(|value| doi(value));
+fn search_arxiv(entry: &Entry) -> Result<Option<String>> {
+    let title_text = literature::field(entry, "title").unwrap_or_default();
+    let title = normalized(&title_text);
+    let expected_doi = entry.doi().ok().and_then(|value| doi(&value));
     if title.len() < 12 {
         return Ok(None);
     }
-    let author_separator = regex::Regex::new(r"(?i)\s+and\s+")?;
-    let surname = fields
-        .get("author")
-        .and_then(|authors| author_separator.split(authors).next())
-        .map(|author| {
-            author
-                .split_once(',')
-                .map(|(family, _)| family)
-                .unwrap_or_else(|| author.split_whitespace().last().unwrap_or(""))
-        })
-        .map(normalized)
+    let surname = entry
+        .author()
+        .ok()
+        .and_then(|people| people.into_iter().next())
+        .map(|person| normalized(&person.name))
         .filter(|name| !name.is_empty());
     let client = publication::client(Duration::from_secs(30))?;
-    let query = format!("ti:\"{}\"", fields["title"].replace(['"', '\\'], " "));
+    let query = format!("ti:\"{}\"", title_text.replace(['"', '\\'], " "));
     let xml = publication::arxiv_query(&client, &[("search_query", &query), ("max_results", "5")])?;
     let document =
         roxmltree::Document::parse(&xml).context("arXiv returned invalid search results")?;
@@ -247,8 +238,8 @@ impl Library {
             Some(source) => source.to_owned(),
             None => fs::read_to_string(path)?,
         };
-        let fields = literature::parse(&source, id)?;
-        let pdf = PdfSource::find(&fields)?;
+        let entry = literature::parse(&source, id)?;
+        let pdf = PdfSource::find(&entry)?;
         self.attach_paper_pdf(id, &pdf)
     }
 

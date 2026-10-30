@@ -95,8 +95,8 @@ export function createLibrarySession() {
     return column.key;
   }
   function focusActive() {
-    if (mode() === "edit") editor()?.focus();
-    else main?.focus();
+    if (mode() === "edit") editor()?.focus({ preventScroll: true });
+    else main?.focus({ preventScroll: true });
   }
   function revealColumn(key: number) {
     batch(() => {
@@ -636,7 +636,7 @@ export function createLibrarySession() {
         selection.noteId === current()?.note.id &&
         source() === selection.source
       ) {
-        editor()!.focus();
+        editor()!.focus({ preventScroll: true });
         editor()!.setSelectionRange(selection.start, selection.end);
       }
       pendingLink = undefined;

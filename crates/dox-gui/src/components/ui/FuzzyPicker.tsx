@@ -168,7 +168,9 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
     props.onCloseAutoFocus?.(event);
     const choice = pending;
     pending = undefined;
-    if (choice) setTimeout(() => props.onSelect(choice.item), 0);
+    // Kobalte finishes removing the old focus scope after this callback. A
+    // microtask waits for that cleanup without adding another timer/paint gap.
+    if (choice) queueMicrotask(() => props.onSelect(choice.item));
   };
   return (
     <Dialog

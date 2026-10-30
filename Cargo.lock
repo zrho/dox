@@ -1279,6 +1279,7 @@ name = "dox-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "biblatex",
  "dirs 6.0.0",
  "dom_query",
  "jiff",
