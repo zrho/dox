@@ -23,6 +23,10 @@ enum Action {
     },
     /// Create an editable single-entry BibTeX literature item.
     Literature,
+    /// Import publication metadata, including the PDF for arXiv items.
+    ImportPublication { input: String },
+    /// Find and attach a paper PDF using a literature item's saved BibTeX.
+    FindPaperPdf { id: String },
     /// List files attached to any item.
     Attachments { id: String },
     /// Copy a file into an item's attachments directory.
@@ -83,6 +87,10 @@ fn main() -> Result<()> {
         Action::Init => unreachable!(),
         Action::New { title, tags } => serde_json::to_value(lib.create(&title, tags)?)?,
         Action::Literature => serde_json::to_value(lib.create_literature()?)?,
+        Action::ImportPublication { input } => {
+            serde_json::to_value(lib.import_publication(&input)?)?
+        }
+        Action::FindPaperPdf { id } => serde_json::to_value(lib.find_paper_pdf(&id, None)?)?,
         Action::Attachments { id } => serde_json::to_value(lib.attachments(&id)?)?,
         Action::Attach { id, path } => serde_json::to_value(lib.attach_file(&id, path)?)?,
         Action::RemoveAttachment { id, name } => {

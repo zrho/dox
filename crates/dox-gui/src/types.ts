@@ -42,6 +42,10 @@ export type Attachment = {
   name: string;
   size: number;
 };
+export type PublicationImport = {
+  document: Document;
+  warnings: string[];
+};
 export type Index = {
   notes: Note[];
   warnings: string[];

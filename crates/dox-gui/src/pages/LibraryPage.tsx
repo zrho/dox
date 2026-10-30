@@ -77,6 +77,11 @@ export default function LibraryPage() {
           </pre>
         </Alert>
       </Show>
+      <Show when={app.warning()}>
+        <Alert variant="warning" onDismiss={app.dismissWarning}>
+          <p class="m-0 whitespace-pre-wrap">{app.warning()}</p>
+        </Alert>
+      </Show>
       <Show when={app.external()}>
         <Alert
           actions={

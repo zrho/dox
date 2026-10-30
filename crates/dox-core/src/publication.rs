@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail, ensure};
 use percent_encoding::percent_decode_str;
 use regex::Regex;
 use reqwest::{Url, blocking::Client};
+use serde::{Deserialize, Serialize};
 use std::{
     io::Read,
     sync::{LazyLock, Mutex},
@@ -18,6 +19,14 @@ static ARXIV: LazyLock<Regex> = LazyLock::new(|| {
 });
 // arXiv asks clients to leave three seconds between API requests.
 static LAST_ARXIV_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
+pub(crate) const ATOM: &str = "http://www.w3.org/2005/Atom";
+pub(crate) const ARXIV_NS: &str = "http://arxiv.org/schemas/atom";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicationImport {
+    pub document: crate::NoteDocument,
+    pub warnings: Vec<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublicationIdentifier {
@@ -114,20 +123,24 @@ impl PublicationIdentifier {
     }
 }
 
-pub(crate) fn lookup(input: &str) -> Result<String> {
-    let identifier = PublicationIdentifier::parse(input)?;
-    let client = Client::builder()
+pub(crate) fn client(timeout: Duration) -> Result<Client> {
+    Client::builder()
         .tls_backend_native()
         .user_agent(concat!(
             "dox/",
             env!("CARGO_PKG_VERSION"),
-            " (publication metadata import)"
+            " (publication lookup)"
         ))
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(30))
+        .timeout(timeout)
         .https_only(true)
         .build()
-        .context("Couldn't initialize publication lookup")?;
+        .context("Couldn't initialize publication lookup")
+}
+
+pub(crate) fn lookup(input: &str) -> Result<String> {
+    let identifier = PublicationIdentifier::parse(input)?;
+    let client = client(Duration::from_secs(30))?;
     let bibtex = match identifier {
         PublicationIdentifier::Doi(doi) => {
             let mut url = Url::parse("https://doi.org/")?;
@@ -135,25 +148,28 @@ pub(crate) fn lookup(input: &str) -> Result<String> {
             download(&client, url, "application/x-bibtex", &format!("DOI {doi}"))?
         }
         PublicationIdentifier::Arxiv(id) => {
-            {
-                let mut last = LAST_ARXIV_REQUEST
-                    .lock()
-                    .map_err(|_| anyhow::anyhow!("arXiv lookup is unavailable"))?;
-                if let Some(previous) = *last {
-                    std::thread::sleep(Duration::from_secs(3).saturating_sub(previous.elapsed()));
-                }
-                *last = Some(Instant::now());
-            }
-            let mut url = Url::parse("https://export.arxiv.org/api/query")?;
-            url.query_pairs_mut()
-                .append_pair("id_list", &id)
-                .append_pair("max_results", "1");
-            let xml = download(&client, url, "application/atom+xml", &format!("arXiv:{id}"))?;
+            let xml = arxiv_query(&client, &[("id_list", &id), ("max_results", "1")])?;
             arxiv_bibtex(&xml, &id)?
         }
     };
     literature::with_key(&bibtex, "IMPORT")
         .context("The metadata service didn't return a usable single-entry BibTeX reference")
+}
+
+pub(crate) fn arxiv_query(client: &Client, parameters: &[(&str, &str)]) -> Result<String> {
+    {
+        let mut last = LAST_ARXIV_REQUEST
+            .lock()
+            .map_err(|_| anyhow::anyhow!("arXiv lookup is unavailable"))?;
+        if let Some(previous) = *last {
+            std::thread::sleep(Duration::from_secs(3).saturating_sub(previous.elapsed()));
+        }
+        *last = Some(Instant::now());
+    }
+    let mut url = Url::parse("https://export.arxiv.org/api/query")?;
+    url.query_pairs_mut()
+        .extend_pairs(parameters.iter().copied());
+    download(client, url, "application/atom+xml", "arXiv publication")
 }
 
 fn download(client: &Client, url: Url, accept: &str, label: &str) -> Result<String> {
@@ -186,8 +202,6 @@ fn download(client: &Client, url: Url, accept: &str, label: &str) -> Result<Stri
 }
 
 fn arxiv_bibtex(xml: &str, id: &str) -> Result<String> {
-    const ATOM: &str = "http://www.w3.org/2005/Atom";
-    const ARXIV_NS: &str = "http://arxiv.org/schemas/atom";
     let document = roxmltree::Document::parse(xml).context("arXiv returned invalid metadata")?;
     let entry = document
         .descendants()
@@ -243,9 +257,9 @@ fn arxiv_bibtex(xml: &str, id: &str) -> Result<String> {
     let mut fields = vec![
         ("title", title),
         ("author", authors),
-        ("eprint", id.to_owned()),
+        ("eprint", returned_id.clone()),
         ("archiveprefix", "arXiv".to_owned()),
-        ("url", format!("https://arxiv.org/abs/{id}")),
+        ("url", format!("https://arxiv.org/abs/{returned_id}")),
     ];
     let published = text(ATOM, "published");
     if let Some(date) = published

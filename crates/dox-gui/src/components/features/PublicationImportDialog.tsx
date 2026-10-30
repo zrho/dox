@@ -45,7 +45,7 @@ export default function PublicationImportDialog(props: {
       }}
       title="Import publication from link or tag"
       titleClass="mb-2 text-sm font-medium"
-      description="Enter a DOI, arXiv ID, or publication link."
+      description="Enter a DOI, arXiv ID, or publication link. arXiv imports include the paper PDF."
       class="p-4"
       onOpenAutoFocus={(event) => {
         event.preventDefault();

@@ -28,7 +28,7 @@ export default function Alert(props: {
       <div class="min-w-0">{props.children}</div>
       {props.actions}
       <Show when={props.onDismiss}>
-        <Button aria-label="Dismiss error" onClick={() => props.onDismiss?.()}>
+        <Button aria-label={props.variant === "error" ? "Dismiss error" : "Dismiss warning"} onClick={() => props.onDismiss?.()}>
           <X size={12} strokeWidth={1.5} aria-hidden="true" />
         </Button>
       </Show>

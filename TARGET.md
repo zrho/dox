@@ -39,6 +39,7 @@
   - Support links between notes, tags, and backlinks.
   - Initially express note links as ordinary links in Typst; frontend JavaScript turns them into in-app navigation actions.
   - Literature items have type `literature` and contain one bibliographic reference per note, backed by a BibTeX file instead of a Typst file.
+    - Automatically attach the PDF for arXiv imports, preserving the reference with a warning if the download fails. Provide a Find and attach paper PDF command for the focused literature item, using its current BibTeX draft without saving it. Resolve explicit arXiv identifiers or conservatively match arXiv title/author/DOI metadata; reject ambiguous matches, incomplete downloads, and non-PDF responses. Reuse identical attached PDFs. Keep PDF source resolution separate from general attachment storage for future providers.
     - Provide an Import publication from link or tag command with a text-entry dialog. Resolve DOI strings/links and current/legacy arXiv IDs/links in the core, retrieve online metadata, and create a validated single-entry BibTeX item only on success. Keep errors in the dialog and preserve open drafts.
     - Use the note's generated ID as its citation key.
     - Citations from Typst notes support navigation and backlinks similarly to ordinary note links. Generate the library bibliography in the disposable cache, but hide its rendered list. Show target titles in component tooltips on citations and note links.

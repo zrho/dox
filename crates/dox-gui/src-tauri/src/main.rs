@@ -1,4 +1,4 @@
-use dox_core::{Attachment, DeletedNote, Library, LibraryIndex, NoteDocument};
+use dox_core::{Attachment, DeletedNote, Library, LibraryIndex, NoteDocument, PublicationImport};
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{Emitter, Manager, State};
 
@@ -119,9 +119,21 @@ async fn import_publication(
     input: String,
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
-) -> Result<NoteDocument, String> {
+) -> Result<PublicationImport, String> {
     with_library(window, state, move |library| {
         library.import_publication(&input)
+    })
+    .await
+}
+#[tauri::command]
+async fn find_paper_pdf(
+    id: String,
+    source: Option<String>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<Attachment, String> {
+    with_library(window, state, move |library| {
+        library.find_paper_pdf(&id, source.as_deref())
     })
     .await
 }
@@ -246,6 +258,7 @@ fn main() {
             create_note,
             create_literature,
             import_publication,
+            find_paper_pdf,
             save_note,
             set_note_pinned,
             render_note,

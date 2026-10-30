@@ -97,9 +97,18 @@ impl Library {
             .file_name()
             .and_then(|name| name.to_str())
             .context("Missing or unsupported filename")?;
-        ensure!(valid_name(name), "Invalid attachment filename");
-        let mut input = fs::File::open(source).context("Could not open attachment")?;
+        let input = fs::File::open(source).context("Could not open attachment")?;
         ensure!(input.metadata()?.is_file(), "Only files can be attached");
+        self.attach_reader(id, name, input)
+    }
+
+    pub(crate) fn attach_reader(
+        &self,
+        id: &str,
+        name: &str,
+        mut input: impl io::Read,
+    ) -> Result<Attachment> {
+        ensure!(valid_name(name), "Invalid attachment filename");
         let dir = self.attachment_directory(id)?;
         fs::create_dir_all(&dir)?;
         let mut temp = tempfile::Builder::new()

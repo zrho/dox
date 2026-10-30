@@ -44,6 +44,9 @@
   "attach-files": {
     "title": "Attach files to item"
   },
+  "find-paper-pdf": {
+    "title": "Find and attach paper PDF"
+  },
   "save": {
     "title": "Save note",
     "binding": {

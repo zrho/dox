@@ -7,11 +7,12 @@ mod fuzzy;
 pub use fuzzy::{FuzzyMatch, FuzzyResult, fuzzy_find};
 mod literature;
 mod publication;
+mod publication_pdf;
 use anyhow::{Context, Result, bail, ensure};
 pub use diagnostics::{Diagnostic, DiagnosticAction, Severity};
 use dom_query::Document as HtmlDocument;
 use notify::{RecursiveMode, Watcher};
-pub use publication::PublicationIdentifier;
+pub use publication::{PublicationIdentifier, PublicationImport};
 use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -829,11 +830,21 @@ impl Library {
         self.create_inner(None, vec![], "literature", None)
     }
 
-    /// Resolve an identifier before allocating an item. Failed lookups leave no
-    /// empty drafts behind; successful imports retain the provider's BibTeX.
-    pub fn import_publication(&self, input: &str) -> Result<NoteDocument> {
+    /// Metadata failures create no item. PDF failures preserve the imported
+    /// reference and return a warning, so callers can offer a retry.
+    pub fn import_publication(&self, input: &str) -> Result<PublicationImport> {
         let bibtex = publication::lookup(input)?;
-        self.create_inner(None, vec![], "literature", Some(&bibtex))
+        let fields = literature::parse(&bibtex, "IMPORT")?;
+        let pdf = publication_pdf::PdfSource::from_fields(&fields);
+        let mut document = self.create_inner(None, vec![], "literature", Some(&bibtex))?;
+        let mut warnings = vec![];
+        if let Some(pdf) = pdf {
+            match self.attach_paper_pdf(&document.note.id, &pdf) {
+                Ok(attachment) => document.attachments.push(attachment),
+                Err(error) => warnings.push(format!("Publication imported, but its PDF could not be attached: {error:#}. Use Find and attach paper PDF to retry.")),
+            }
+        }
+        Ok(PublicationImport { document, warnings })
     }
 
     fn create_inner(

@@ -17,6 +17,7 @@ import type {
   NoteColumn,
   NotePickerMode,
   Attachment,
+  PublicationImport,
 } from "../types";
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
 const defaultZoom = { editorZoom: 100, viewZoom: 90 };
@@ -164,6 +165,7 @@ export function createLibrarySession() {
     });
   }
   const [error, setError] = createSignal("");
+  const [warning, setWarning] = createSignal("");
   const [lastDeleted, setLastDeleted] = createSignal<DeletedNote>();
   const [busy, setBusy] = createSignal(false);
   const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
@@ -235,6 +237,7 @@ export function createLibrarySession() {
     const root = await invoke<string>("open_library", { path });
     ++request;
     setLibrary(root);
+    setWarning("");
     setLastDeleted(undefined);
     setWorkspace("columns", []);
     setActiveKey(undefined);
@@ -377,6 +380,14 @@ export function createLibrarySession() {
     }))) return;
     await invoke<void>("remove_attachment", { id, name });
     await refreshAttachments(id);
+  }
+  async function findPaperPdf() {
+    const column = activeColumn();
+    if (!column || column.document.note.metadata.type !== "literature") return;
+    const id = column.document.note.id;
+    await invoke<Attachment>("find_paper_pdf", { id, source: column.source });
+    await refreshAttachments(id);
+    setWarning("");
   }
   async function togglePin() {
     const active = current();
@@ -647,8 +658,11 @@ export function createLibrarySession() {
     if (busy()) throw new Error("Another operation is in progress. Try again shortly.");
     setBusy(true);
     setError("");
+    setWarning("");
     try {
-      const doc = await invoke<Document>("import_publication", { input });
+      const imported = await invoke<PublicationImport>("import_publication", { input });
+      const doc = imported.document;
+      setWarning(imported.warnings.join("\n"));
       ++indexRequest;
       ++request;
       // Append the imported item without disturbing any open drafts.
@@ -686,6 +700,7 @@ export function createLibrarySession() {
       const id = current()?.note.id;
       if (id) await attachFiles(id);
     },
+    "find-paper-pdf": findPaperPdf,
     save,
     "toggle-mode": toggleMode,
     edit,
@@ -741,6 +756,8 @@ export function createLibrarySession() {
         );
       case "save":
         return !!current() && dirty();
+      case "find-paper-pdf":
+        return current()?.note.metadata.type === "literature";
       default:
         return !!current();
     }
@@ -861,6 +878,7 @@ export function createLibrarySession() {
     viewZoom,
     html,
     error,
+    warning,
     lastDeleted,
     busy,
     external,
@@ -891,6 +909,7 @@ export function createLibrarySession() {
       void run(() => openDiagnostic(issue));
     },
     dismissError: () => setError(""),
+    dismissWarning: () => setWarning(""),
     reload: () => {
       if (
         current() &&
