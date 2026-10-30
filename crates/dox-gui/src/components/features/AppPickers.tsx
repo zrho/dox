@@ -10,6 +10,7 @@ import Kbd from "../ui/Kbd";
 import FuzzyPicker, { MatchText, type FuzzyResult } from "../ui/FuzzyPicker";
 import NoteTitle, { titleText, type TitledNote } from "./NoteTitle";
 import NoteIcon from "./NoteIcon";
+import type { NotePickerMode } from "../../types";
 
 function findMatches(query: string, candidates: string[][]) {
   return invoke<FuzzyResult[]>("fuzzy_find", { query, candidates });
@@ -63,7 +64,7 @@ type PickerNote = TitledNote & {
 };
 type NotePickerProps = {
   open: boolean;
-  mode?: "open" | "insert";
+  mode?: NotePickerMode;
   onCloseAutoFocus?: (event: Event) => void;
   notes: PickerNote[];
   busy: boolean;
@@ -71,14 +72,19 @@ type NotePickerProps = {
   onSelect: (id: string) => void;
 };
 export function NotePicker(props: NotePickerProps) {
+  const inserting = () => props.mode === "insert" || props.mode === "insert-with-title";
   return (
     <FuzzyPicker
       open={props.open}
       onOpenChange={props.onOpenChange}
-      title={props.mode === "insert" ? "Insert link or citation" : "Find note"}
+      title={props.mode === "insert-with-title"
+        ? "Insert link or citation with title"
+        : inserting() ? "Insert link or citation" : "Find note"}
       listLabel="Notes"
-      placeholder={props.mode === "insert" ? "Link or cite…" : "Find note…"}
-      shortcut={commandBinding(props.mode === "insert" ? "insert" : "find")}
+      placeholder={inserting() ? "Link or cite…" : "Find note…"}
+      shortcut={commandBinding(props.mode === "insert-with-title"
+        ? "insert-with-title"
+        : inserting() ? "insert" : "find")}
       items={props.notes}
       busy={props.busy}
       searchTexts={(note) => [titleText(note), note.title, note.id]}

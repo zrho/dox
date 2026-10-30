@@ -65,7 +65,8 @@ export function createDesktopLifecycle(options: {
       if (
         options.modalOpen() ||
         (command.id === "close" && event.repeat) ||
-        (command.id === "insert" && !options.editorFocused())
+        ((command.id === "insert" || command.id === "insert-with-title") &&
+          !options.editorFocused())
       )
         return;
       options.onCommand(command.id);

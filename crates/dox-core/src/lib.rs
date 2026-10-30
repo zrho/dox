@@ -3,11 +3,13 @@ mod diagnostics;
 mod fuzzy;
 pub use fuzzy::{FuzzyMatch, FuzzyResult, fuzzy_find};
 mod literature;
+mod publication;
 use anyhow::{Context, Result, bail, ensure};
 use diagnostics::compiler_diagnostics;
 pub use diagnostics::{Diagnostic, DiagnosticAction, Severity};
 use dom_query::Document as HtmlDocument;
 use notify::{RecursiveMode, Watcher};
+pub use publication::PublicationIdentifier;
 use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -876,16 +878,23 @@ impl Library {
     }
     pub fn create(&self, title: &str, tags: Vec<String>) -> Result<NoteDocument> {
         ensure!(!title.trim().is_empty(), "Title must not be empty");
-        self.create_inner(Some(title.trim()), tags, "typst")
+        self.create_inner(Some(title.trim()), tags, "typst", None)
     }
 
     /// Create an editable draft whose title comes from its heading.
     pub fn create_untitled(&self) -> Result<NoteDocument> {
-        self.create_inner(None, vec![], "typst")
+        self.create_inner(None, vec![], "typst", None)
     }
 
     pub fn create_literature(&self) -> Result<NoteDocument> {
-        self.create_inner(None, vec![], "literature")
+        self.create_inner(None, vec![], "literature", None)
+    }
+
+    /// Resolve an identifier before allocating an item. Failed lookups leave no
+    /// empty drafts behind; successful imports retain the provider's BibTeX.
+    pub fn import_publication(&self, input: &str) -> Result<NoteDocument> {
+        let bibtex = publication::lookup(input)?;
+        self.create_inner(None, vec![], "literature", Some(&bibtex))
     }
 
     fn create_inner(
@@ -893,6 +902,7 @@ impl Library {
         title: Option<&str>,
         tags: Vec<String>,
         kind: &str,
+        initial_bibtex: Option<&str>,
     ) -> Result<NoteDocument> {
         const ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let mut rng = rand::rng();
@@ -924,21 +934,20 @@ impl Library {
                             &dir.join("meta.json"),
                             &serde_json::to_vec_pretty(&metadata)?,
                         )?;
-                        let source = if kind == "literature" {
+                        let source = if let Some(bibtex) = initial_bibtex {
+                            literature::with_key(bibtex, &id)?
+                        } else if kind == "literature" {
                             format!(
                                 "@article{{{id},\n  title = {{Untitled}},\n  author = {{Author}},\n}}\n"
                             )
                         } else {
-                            match title {
-                                Some(title) => {
-                                    format!("= {title}\n\n#metadata(\"{today}\") <dox-date>\n\n")
-                                }
-                                None => {
-                                    format!("= Untitled\n\n#metadata(\"{today}\") <dox-date>\n\n")
-                                }
-                            }
+                            let title = title.unwrap_or("Untitled");
+                            format!("#metadata(\"{today}\") <dox-date>\n\n= {title}\n\n")
                         };
                         atomic_write(&dir.join(&metadata.document), source.as_bytes())?;
+                        if initial_bibtex.is_some() {
+                            return self.read(&id);
+                        }
                         let revision = digest(
                             [source.as_bytes(), &serde_json::to_vec(&metadata)?]
                                 .concat()

@@ -12,17 +12,20 @@ import Button from "../ui/Button";
 import NoteTitle, { titleText } from "./NoteTitle";
 import NoteWorkspace from "./NoteWorkspace";
 import BacklinksPanel from "./BacklinksPanel";
+import { createColumnDrag } from "../../hooks/createColumnDrag";
 import type { Note, NoteColumn } from "../../types";
 
 const MAX_WIDTH = 520;
 const MIN_WIDTH = 280;
-/** A normal horizontal row of independently scrollable note columns. */
+/** Horizontally scrollable panes; transforms animate their reorder positions. */
 export default function NoteColumns(props: {
   columns: NoteColumn[];
   activeKey?: number;
+  revealRequest: number;
   notes: Note[];
   busy: boolean;
   onActivate: (key: number) => void;
+  onMove: (key: number, index: number) => void;
   onClose: (key: number) => void;
   onNavigate: (id: string, fromKey: number) => void;
   onSourceChange: (key: number, source: string) => void;
@@ -42,18 +45,28 @@ export default function NoteColumns(props: {
   });
   const columnWidth = () =>
     Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, availableWidth()));
+  const drag = createColumnDrag({
+    columns: () => props.columns,
+    width: columnWidth,
+    viewport: () => viewport,
+    enabled: () => !props.busy,
+    onActivate: props.onActivate,
+    onMove: props.onMove,
+  });
   let revealRequest = 0;
   createEffect(() => {
     const index = props.columns.findIndex(
       (column) => column.key === props.activeKey,
     );
     const width = columnWidth();
+    // An already-active pane may have been manually scrolled out of view.
+    const explicitRequest = props.revealRequest;
     const request = ++revealRequest;
-    if (index < 0) return;
+    if (drag.interacting() || index < 0) return;
     // Reveal a newly selected column only as far as necessary. Scrolling itself
     // neither changes selection nor rearranges the row.
     queueMicrotask(() => {
-      if (request !== revealRequest || !viewport) return;
+      if (request !== revealRequest || explicitRequest !== props.revealRequest || !viewport) return;
       const left = index * width;
       const right = left + width;
       if (left < viewport.scrollLeft) viewport.scrollLeft = left;
@@ -65,19 +78,26 @@ export default function NoteColumns(props: {
     <div
       ref={viewport}
       class="relative min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain bg-panel [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      classList={{ "select-none": drag.draggingKey() !== undefined }}
       aria-label="Note columns"
     >
-      <div class="flex h-full w-max min-w-full">
+      <div class="relative h-full min-w-full" style={{ width: `${props.columns.length * columnWidth()}px` }}>
         <For each={props.columns}>
-          {(column) => (
+          {(column, index) => (
             <NoteColumnPanel
               column={column}
               width={columnWidth()}
+              left={drag.left(column.key, index())}
+              dragging={drag.draggingKey() === column.key}
               active={props.activeKey === column.key}
               busy={props.busy}
               notes={props.notes}
               onActivate={() => props.onActivate(column.key)}
               onClose={() => props.onClose(column.key)}
+              onDragStart={(event) => drag.start(column.key, event)}
+              onDragMove={drag.move}
+              onDragEnd={drag.end}
+              onDragCancel={drag.cancel}
               onNavigate={(id) => props.onNavigate(id, column.key)}
               onSourceChange={(source) =>
                 props.onSourceChange(column.key, source)
@@ -96,11 +116,17 @@ export default function NoteColumns(props: {
 function NoteColumnPanel(props: {
   column: NoteColumn;
   width: number;
+  left: number;
+  dragging: boolean;
   active: boolean;
   busy: boolean;
   notes: Note[];
   onActivate: () => void;
   onClose: () => void;
+  onDragStart: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => void;
+  onDragMove: (event: PointerEvent) => void;
+  onDragEnd: (event: PointerEvent) => void;
+  onDragCancel: (event: PointerEvent) => void;
   onNavigate: (id: string) => void;
   onSourceChange: (source: string) => void;
   getNoteTitle: (id: string) => string | undefined;
@@ -116,12 +142,20 @@ function NoteColumnPanel(props: {
   );
   return (
     <section
-      class="flex h-full shrink-0 flex-col border-t-2 border-r border-border bg-background"
+      class="absolute top-0 left-0 flex h-full flex-col border-t-2 border-r border-border bg-background motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
       classList={{
         "border-t-accent": props.active,
         "border-t-border": !props.active,
+        "z-10": props.dragging,
+        "shadow-lg": props.dragging,
+        "shadow-overlay/25": props.dragging,
+        "will-change-transform": props.dragging,
       }}
-      style={{ width: `${props.width}px` }}
+      style={{
+        width: `${props.width}px`,
+        transform: `translateX(${props.left}px)`,
+        transition: props.dragging ? "none" : undefined,
+      }}
       aria-label={`${titleText(note())}${dirty() ? " (unsaved)" : ""}`}
       onPointerDown={(event) => {
         pointerDown = true;
@@ -131,6 +165,9 @@ function NoteColumnPanel(props: {
         pointerDown = false;
       }}
       onPointerCancel={() => {
+        pointerDown = false;
+      }}
+      onLostPointerCapture={() => {
         pointerDown = false;
       }}
       onClick={props.onActivate}
@@ -143,7 +180,13 @@ function NoteColumnPanel(props: {
       >
         <button
           type="button"
-          class="min-w-0 flex-1 cursor-pointer truncate text-left text-xs text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          class="min-w-0 flex-1 touch-none self-stretch truncate text-left text-xs text-foreground select-none focus-visible:outline-2 focus-visible:outline-ring"
+          classList={{ "cursor-grab": !props.dragging, "cursor-grabbing": props.dragging }}
+          onPointerDown={props.onDragStart}
+          onPointerMove={props.onDragMove}
+          onPointerUp={props.onDragEnd}
+          onPointerCancel={props.onDragCancel}
+          onLostPointerCapture={props.onDragCancel}
           onClick={props.onActivate}
           title={titleText(note())}
         >

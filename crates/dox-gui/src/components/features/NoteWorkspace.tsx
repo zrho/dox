@@ -39,6 +39,19 @@ export default function NoteWorkspace(props: {
           readOnly={props.readOnly}
           spellcheck={false}
           value={props.source}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "Tab" || event.shiftKey || event.metaKey ||
+              event.ctrlKey || event.altKey || event.isComposing ||
+              event.currentTarget.readOnly
+            ) return;
+            event.preventDefault();
+            const editor = event.currentTarget;
+            // Use a native editing operation so Tab participates in undo.
+            if (!document.execCommand("insertText", false, "  "))
+              editor.setRangeText("  ", editor.selectionStart, editor.selectionEnd, "end");
+            props.onSourceChange(editor.value);
+          }}
           onInput={(event) => props.onSourceChange(event.currentTarget.value)}
         />
       </div>

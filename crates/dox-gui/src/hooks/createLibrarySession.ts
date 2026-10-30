@@ -15,6 +15,7 @@ import type {
   DeletedNote,
   Diagnostic,
   NoteColumn,
+  NotePickerMode,
 } from "../types";
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
 export function createLibrarySession() {
@@ -38,6 +39,7 @@ export function createLibrarySession() {
     columns: [],
   });
   const [activeKey, setActiveKey] = createSignal<number>();
+  const [columnReveal, setColumnReveal] = createSignal(0);
   let nextColumnKey = 0;
   const columns = () => workspace.columns;
   const activeColumn = () =>
@@ -93,6 +95,13 @@ export function createLibrarySession() {
     if (mode() === "edit") editor()?.focus();
     else main?.focus();
   }
+  function revealColumn(key: number) {
+    batch(() => {
+      setActiveKey(key);
+      setColumnReveal((request) => request + 1);
+    });
+    queueMicrotask(focusActive);
+  }
   const columnDirty = (column: NoteColumn) =>
     column.source !== column.document.source;
   const anyDirty = () => columns().some(columnDirty);
@@ -105,6 +114,17 @@ export function createLibrarySession() {
   function activateColumn(key: number) {
     if (!busy() && columns().some((column) => column.key === key))
       setActiveKey(key);
+  }
+  function moveColumn(key: number, destination: number) {
+    if (busy()) return;
+    const reordered = [...columns()];
+    const from = reordered.findIndex((column) => column.key === key);
+    if (from < 0) return;
+    const to = Math.max(0, Math.min(reordered.length - 1, destination));
+    if (from === to) return;
+    const [column] = reordered.splice(from, 1);
+    reordered.splice(to, 0, column);
+    setWorkspace("columns", reordered);
   }
   function removeColumn(key: number) {
     const position = columns().findIndex((column) => column.key === key);
@@ -139,7 +159,8 @@ export function createLibrarySession() {
   const [busy, setBusy] = createSignal(false);
   const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
   const [pickerOpen, setPickerOpen] = createSignal(false);
-  const [pickerMode, setPickerMode] = createSignal<"open" | "insert">("open");
+  const [pickerMode, setPickerMode] = createSignal<NotePickerMode>("open");
+  const [publicationImportOpen, setPublicationImportOpen] = createSignal(false);
   const dirty = createMemo(() => !!current() && source() !== current()!.source);
   const pinnedNotes = createMemo(() =>
     index().notes.filter((note) => note.metadata.pinned === true),
@@ -225,11 +246,23 @@ export function createLibrarySession() {
         : "";
     return { document, html };
   }
+  async function openPickedNote(id: string) {
+    const focused = activeColumn();
+    const existing = focused?.document.note.id === id
+      ? focused
+      : columns().find((column) => column.document.note.id === id);
+    if (existing) {
+      revealColumn(existing.key);
+      return;
+    }
+    const token = ++request;
+    const result = await readColumn(id);
+    if (token === request) addColumn(result.document, result.html);
+  }
   async function load(id: string, force = false) {
     const existing = columns().find((column) => column.document.note.id === id);
     if (existing && !force) {
-      setActiveKey(existing.key);
-      queueMicrotask(focusActive);
+      revealColumn(existing.key);
       return;
     }
     if (!force && !confirmDiscard(columns())) return;
@@ -252,8 +285,7 @@ export function createLibrarySession() {
     if (from < 0) return;
     const existing = columns().find((column) => column.document.note.id === id);
     if (existing) {
-      setActiveKey(existing.key);
-      queueMicrotask(focusActive);
+      revealColumn(existing.key);
       return;
     }
     if (!confirmDiscard(columns().slice(from + 1))) return;
@@ -464,7 +496,7 @@ export function createLibrarySession() {
     setPickerMode("open");
     setPickerOpen(true);
   }
-  function openLinkPicker() {
+  function openLinkPicker(withTitle = false) {
     if (current()?.note.metadata.type !== "typst") return;
     if (
       busy() ||
@@ -480,12 +512,12 @@ export function createLibrarySession() {
       start: editor()!.selectionStart,
       end: editor()!.selectionEnd,
     };
-    setPickerMode("insert");
+    setPickerMode(withTitle ? "insert-with-title" : "insert");
     setPickerOpen(true);
   }
   function selectNote(id: string) {
     if (pickerMode() === "open") {
-      void run(() => load(id));
+      void run(() => openPickedNote(id));
       return;
     }
     const target = index().notes.find((note) => note.id === id);
@@ -503,9 +535,17 @@ export function createLibrarySession() {
     }
     const label =
       selection.source.slice(selection.start, selection.end) || target.title;
+    // Publication titles are bibliographic text, rather than Typst source.
+    const publicationTitle = titleText(target)
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[\\#@[\]{}$*_`<>~=+.\/-]/g, "\\$&");
+    const citation = pickerMode() === "insert-with-title"
+      ? `${publicationTitle} @${target.id}`
+      : `@${target.id}`;
     const link =
       target.metadata.type === "literature"
-        ? `@${target.id}`
+        ? citation
         : `#link("dox:${target.id}")[${label}]`;
     const updated =
       selection.source.slice(0, selection.start) +
@@ -521,7 +561,7 @@ export function createLibrarySession() {
     };
   }
   function pickerCloseFocus(event: Event) {
-    if (pickerMode() !== "insert") return;
+    if (pickerMode() === "open") return;
     event.preventDefault();
     queueMicrotask(() => {
       const selection = pendingLink;
@@ -567,6 +607,30 @@ export function createLibrarySession() {
         : `#link("dox:${note.id}")[${note.title}]`,
     );
   }
+  async function importPublication(input: string) {
+    if (busy()) throw new Error("Another operation is in progress. Try again shortly.");
+    setBusy(true);
+    setError("");
+    try {
+      const doc = await invoke<Document>("import_publication", { input });
+      ++indexRequest;
+      ++request;
+      // Append the imported item without disturbing any open drafts.
+      const key = addColumn(doc, "", "edit");
+      setIndex((previous) => ({ ...previous, notes: [doc.note, ...previous.notes] }));
+      // Creation has succeeded. A later render/refresh failure must not invite
+      // another import of the same item; leave its source available instead.
+      try {
+        const html = await invoke<string>("render_note", { id: doc.note.id });
+        updateColumn(key, { html, mode: "view" });
+        await refresh();
+      } catch (error) {
+        setError(String(error));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
   const commandHandlers: Record<CommandId, () => void | Promise<void>> = {
     commands: () => {
       setCommandPanelOpen(true);
@@ -575,6 +639,9 @@ export function createLibrarySession() {
     close: closeFocused,
     "new-note": () => create(),
     "new-literature": () => create("literature"),
+    "import-publication": () => {
+      setPublicationImportOpen(true);
+    },
     "open-library": chooseLibrary,
     save,
     "toggle-mode": toggleMode,
@@ -583,6 +650,10 @@ export function createLibrarySession() {
     insert: () => {
       editor()?.focus();
       openLinkPicker();
+    },
+    "insert-with-title": () => {
+      editor()?.focus();
+      openLinkPicker(true);
     },
     copy: copyReference,
     "toggle-sidebar": toggleSidebar,
@@ -611,12 +682,14 @@ export function createLibrarySession() {
       case "find":
       case "new-note":
       case "new-literature":
+      case "import-publication":
         return !!library();
       case "undo-delete":
         return !!lastDeleted();
       case "close":
         return !!current() || sidebarVisible();
       case "insert":
+      case "insert-with-title":
         return (
           !!current() &&
           current()!.note.metadata.type === "typst" &&
@@ -649,8 +722,10 @@ export function createLibrarySession() {
     if (
       [
         "commands",
+        "import-publication",
         "find",
         "insert",
+        "insert-with-title",
         "toggle-sidebar",
         "close",
         "edit",
@@ -707,7 +782,7 @@ export function createLibrarySession() {
   createDesktopLifecycle({
     dirty: anyDirty,
     busy,
-    modalOpen: () => pickerOpen() || commandPanelOpen(),
+    modalOpen: () => pickerOpen() || commandPanelOpen() || publicationImportOpen(),
     editorFocused: () => document.activeElement === editor(),
     onChange: () => run(syncFromDisk),
     onCommand: executeCommand,
@@ -721,7 +796,9 @@ export function createLibrarySession() {
     index,
     columns,
     activeKey,
+    columnReveal,
     activateColumn,
+    moveColumn,
     closeColumn,
     columnDirty,
     current,
@@ -735,6 +812,10 @@ export function createLibrarySession() {
     busy,
     external,
     commandPanelOpen,
+    publicationImportOpen,
+    setPublicationImportOpen,
+    importPublication,
+    focusActive,
     pickerOpen,
     pickerMode,
     dirty,

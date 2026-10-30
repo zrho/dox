@@ -4,6 +4,7 @@ import LibraryTree from "../components/features/LibraryTree";
 import NoteToolbar from "../components/features/NoteToolbar";
 import NoteColumns from "../components/features/NoteColumns";
 import DiagnosticsPanel from "../components/features/DiagnosticsPanel";
+import PublicationImportDialog from "../components/features/PublicationImportDialog";
 import { CommandPicker, NotePicker } from "../components/features/AppPickers";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
@@ -57,6 +58,15 @@ export default function LibraryPage() {
             onSelect={app.selectNote}
             onCloseAutoFocus={app.pickerCloseFocus}
           />
+          <PublicationImportDialog
+            open={app.publicationImportOpen()}
+            onOpenChange={app.setPublicationImportOpen}
+            onImport={app.importPublication}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              queueMicrotask(app.focusActive);
+            }}
+          />
         </>
       }
     >
@@ -81,9 +91,11 @@ export default function LibraryPage() {
       <NoteColumns
         columns={app.columns()}
         activeKey={app.activeKey()}
+        revealRequest={app.columnReveal()}
         notes={app.index().notes}
         busy={app.busy()}
         onActivate={app.activateColumn}
+        onMove={app.moveColumn}
         onClose={app.closeColumn}
         onNavigate={app.openLinked}
         onSourceChange={app.setColumnSource}

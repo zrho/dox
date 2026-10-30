@@ -18,7 +18,7 @@
   - Each note contains one source document and a `meta.json` referencing that document.
   - Required metadata: note type and source document reference.
   - Support optional metadata such as title, authors, date, and tags.
-  - New Typst notes store the current local calendar date in source with `#metadata("YYYY-MM-DD") <dox-date>`. Literature dates come from BibTeX `date` or `year` with optional `month`/`day`. Preserve partial dates, allow dates to be absent, and show known dates as plain toolbar text in view mode only; no date picker.
+  - New Typst notes store the current local calendar date in source with `#metadata("YYYY-MM-DD") <dox-date>`. Literature dates come from BibTeX `date` or `year` with optional `month`/`day`. Preserve partial dates, allow dates to be absent, and show the ID and known date in a compact footer beneath each column’s backlinks in both edit and view modes; no date picker.
   - Support deriving metadata from document content, merging it with explicit metadata, and caching the merged result.
   - Titles support Typst syntax, including math. Cache compiled title HTML for display throughout the UI, retaining Typst source for link labels and plain text for search.
   - Store generated files and caches outside version control; a Git-ignored `.cache` directory within the library is acceptable.
@@ -37,6 +37,7 @@
   - Support links between notes, tags, and backlinks.
   - Initially express note links as ordinary links in Typst; frontend JavaScript turns them into in-app navigation actions.
   - Literature items have type `literature` and contain one bibliographic reference per note, backed by a BibTeX file instead of a Typst file.
+    - Provide an Import publication from link or tag command with a text-entry dialog. Resolve DOI strings/links and current/legacy arXiv IDs/links in the core, retrieve online metadata, and create a validated single-entry BibTeX item only on success. Keep errors in the dialog and preserve open drafts.
     - Use the note's generated ID as its citation key.
     - Citations from Typst notes support navigation and backlinks similarly to ordinary note links. Generate the library bibliography in the disposable cache, but hide its rendered list. Show target titles in component tooltips on citations and note links.
 
@@ -45,14 +46,15 @@
   - Use Lucide icons, including icons for notes; align the compact tree’s indentation guides with the folder icons.
   - Use open/closed folder icons for tree disclosure without a chevron; align child guides beneath the folder icon. Preserve tree indentation guides and full-width hover/selection highlights; Command-B toggles the sidebar.
   - Keep the sidebar free of branding, library counts, and library action buttons; omit a dedicated tags panel for now. Open libraries through the command panel.
-  - Use Command-P to open a compact fuzzy note picker with title/ID matching, arrow-key selection, Enter to open, and Escape to dismiss; omit sidebar search.
+  - Use Command-P to open a compact fuzzy note picker with title/ID matching, arrow-key selection, Enter to focus and reveal an existing pane or append a new one, preserving existing panes and drafts, and Escape to dismiss; omit sidebar search.
   - Provide a New empty literature item command, showing literature in the same tree and pickers with a book icon.
   - Command-Shift-P opens a fuzzy command panel with keyboard navigation and displayed keybindings. Define commands and their keybindings centrally.
   - Create notes immediately without a dialog; focus the editor with a replaceable heading, and derive the title from the content.
   - Keep empty states quiet and omit onboarding copy.
   - Support editing both inside dox and in external editors.
+  - Allow dragging panes by their titles to reorder them with CSS transitions, edge scrolling, and Escape cancellation. Preserve mounted editors, drafts, and scroll state; respect reduced-motion preferences.
   - GUI switches between editing and viewing modes with Command-E or one icon button (pencil to edit, eye to view); live preview is not required.
-  - Command-K while focusing the editor opens a fuzzy note picker and inserts a Typst link at the selection, then returns focus to the editor. Selecting a literature item inserts `@ID` instead.
+  - Command-K while focusing the editor opens a fuzzy note picker and inserts a Typst link at the selection, then returns focus to the editor. Selecting a literature item inserts `@ID` instead. Command-Shift-K uses the same picker and includes the publication title before its citation, escaping Typst characters in bibliographic titles.
   - Use compact toolbar and content padding; show backlinks without a separate outgoing-links panel.
   - Backlinks and diagnostics share a compact, collapsible note-info panel with subtle uppercase headings. Hide the backlinks panel when there are no backlinks.
   - Use Kobalte headless components, Tailwind CSS, and reusable design-system components in `src/ui/components/`, including shared fuzzy-picker behavior, buttons, inputs, and info panels.

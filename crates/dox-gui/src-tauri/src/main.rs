@@ -61,6 +61,17 @@ fn create_note(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String>
 fn create_literature(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
     library(&state)?.create_literature().map_err(error)
 }
+#[tauri::command]
+async fn import_publication(
+    input: String,
+    state: State<'_, Mutex<Session>>,
+) -> Result<NoteDocument, String> {
+    let library = library(&state)?;
+    tauri::async_runtime::spawn_blocking(move || library.import_publication(&input))
+        .await
+        .map_err(error)?
+        .map_err(|error| format!("{error:#}"))
+}
 #[tauri::command(async)]
 fn save_note(
     id: String,
@@ -118,6 +129,7 @@ fn main() {
             read_note,
             create_note,
             create_literature,
+            import_publication,
             save_note,
             set_note_pinned,
             render_note,

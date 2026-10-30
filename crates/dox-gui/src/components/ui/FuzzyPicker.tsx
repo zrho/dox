@@ -1,5 +1,5 @@
 import { cn } from "../../utils/cn";
-import { Dialog } from "@kobalte/core/dialog";
+import Dialog from "./Dialog";
 import {
   createEffect,
   createMemo,
@@ -171,93 +171,86 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
     if (choice) setTimeout(() => props.onSelect(choice.item), 0);
   };
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-20 bg-overlay/20" />
-        <Dialog.Content
-          class={cn(
-            "fixed top-[14vh] left-1/2 z-21 w-[min(560px,calc(100vw_-_48px))] -translate-x-1/2 overflow-hidden rounded-[7px] border border-border-strong bg-popover shadow-[0_16px_64px] shadow-overlay/15",
-            props.class,
-          )}
-          onOpenAutoFocus={onOpenAutoFocus}
-          onCloseAutoFocus={onCloseAutoFocus}
-          onEscapeKeyDown={(event) => event.stopPropagation()}
-        >
-          <Dialog.Title class="sr-only">{props.title}</Dialog.Title>
-          <div class="flex items-center gap-3 border-b border-border px-[13px] py-2">
-            <TextInput
-              variant="search"
-              ref={(element) => {
-                input = element;
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      title={props.title}
+      class={props.class}
+      onOpenAutoFocus={onOpenAutoFocus}
+      onCloseAutoFocus={onCloseAutoFocus}
+    >
+      <div class="flex items-center gap-3 border-b border-border px-[13px] py-2">
+        <TextInput
+          variant="search"
+          ref={(element) => {
+            input = element;
+          }}
+          aria-label={props.label ?? props.title}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={props.open}
+          aria-controls={listId}
+          aria-activedescendant={
+            results().length ? `${listId}-${selected()}` : undefined
+          }
+          placeholder={props.placeholder}
+          autocomplete="off"
+          spellcheck={false}
+          value={query()}
+          onInput={(event) => setQuery(event.currentTarget.value)}
+          onKeyDown={onKey}
+        />
+        <Show when={props.shortcut}>
+          <Kbd>{props.shortcut}</Kbd>
+        </Show>
+      </div>
+      <div
+        ref={(element) => {
+          list = element;
+        }}
+        id={listId}
+        class={cn(
+          "max-h-[min(360px,60vh)] overflow-y-auto overscroll-contain p-1",
+          props.listClass,
+        )}
+        role="listbox"
+        aria-label={props.listLabel}
+        aria-busy={props.busy || loading()}
+      >
+        <For each={results()}>
+          {(result, index) => (
+            <div
+              id={`${listId}-${index()}`}
+              role="option"
+              aria-selected={selected() === index()}
+              aria-disabled={loading() || disabled(result.item)}
+              class="flex min-h-7 cursor-pointer items-center gap-4 rounded-[3px] px-[9px] py-[3px] text-xs aria-selected:bg-picker-selection aria-selected:text-foreground"
+              classList={{
+                "cursor-default opacity-40":
+                  !!props.dimDisabled && disabled(result.item),
               }}
-              aria-label={props.label ?? props.title}
-              role="combobox"
-              aria-autocomplete="list"
-              aria-expanded={props.open}
-              aria-controls={listId}
-              aria-activedescendant={
-                results().length ? `${listId}-${selected()}` : undefined
-              }
-              placeholder={props.placeholder}
-              autocomplete="off"
-              spellcheck={false}
-              value={query()}
-              onInput={(event) => setQuery(event.currentTarget.value)}
-              onKeyDown={onKey}
-            />
-            <Show when={props.shortcut}>
-              <Kbd>{props.shortcut}</Kbd>
-            </Show>
+              data-index={index()}
+              onMouseMove={() => setSelected(index())}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(index())}
+            >
+              {props.renderItem(result.item, result.matches)}
+            </div>
+          )}
+        </For>
+        <Show when={error()}>
+          <div role="alert" class="px-[9px] py-3 text-xs text-destructive">
+            Could not search: {error()}
           </div>
-          <div
-            ref={(element) => {
-              list = element;
-            }}
-            id={listId}
-            class={cn(
-              "max-h-[min(360px,60vh)] overflow-y-auto overscroll-contain p-1",
-              props.listClass,
-            )}
-            role="listbox"
-            aria-label={props.listLabel}
-            aria-busy={props.busy || loading()}
-          >
-            <For each={results()}>
-              {(result, index) => (
-                <div
-                  id={`${listId}-${index()}`}
-                  role="option"
-                  aria-selected={selected() === index()}
-                  aria-disabled={loading() || disabled(result.item)}
-                  class="flex min-h-7 cursor-pointer items-center gap-4 rounded-[3px] px-[9px] py-[3px] text-xs aria-selected:bg-picker-selection aria-selected:text-foreground"
-                  classList={{
-                    "cursor-default opacity-40":
-                      !!props.dimDisabled && disabled(result.item),
-                  }}
-                  data-index={index()}
-                  onMouseMove={() => setSelected(index())}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => choose(index())}
-                >
-                  {props.renderItem(result.item, result.matches)}
-                </div>
-              )}
-            </For>
-            <Show when={error()}>
-              <div role="alert" class="px-[9px] py-3 text-xs text-destructive">
-                Could not search: {error()}
-              </div>
-            </Show>
-            <Show when={!results().length && !error()}>
-              <div class="px-[9px] py-3 text-xs text-muted">
-                {loading()
-                  ? "Finding matches…"
-                  : (props.emptyText ?? "No matches")}
-              </div>
-            </Show>
+        </Show>
+        <Show when={!results().length && !error()}>
+          <div class="px-[9px] py-3 text-xs text-muted">
+            {loading()
+              ? "Finding matches…"
+              : (props.emptyText ?? "No matches")}
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
+        </Show>
+      </div>
     </Dialog>
   );
 }

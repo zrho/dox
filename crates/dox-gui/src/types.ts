@@ -1,4 +1,5 @@
 export type Severity = "error" | "warning" | "proposal";
+export type NotePickerMode = "open" | "insert" | "insert-with-title";
 export type Diagnostic = {
   id: string;
   severity: Severity;
