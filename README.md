@@ -4,7 +4,7 @@ A local notes app for connected mathematical writing. Rust owns the library, met
 
 ## Run
 
-Requires Rust (edition 2024), Node.js 22+, macOS Command Line Tools, and **Typst 0.14+** with HTML export support. Development is verified with Typst 0.15.1. Install Typst with `brew install typst`. dox searches `PATH`; on macOS it also checks `/opt/homebrew/bin/typst`, `/usr/local/bin/typst`, `/opt/local/bin/typst`, and `~/.cargo/bin/typst`, so Finder-launched `.app` bundles can find standard installations without shell configuration. Set `DOX_TYPST` to an executable path for a custom installation; this override takes precedence and must be present in the app's launch environment. Typst remains a runtime dependency, not bundled in the app.
+Building requires Rust (edition 2024), Node.js 22+, and macOS Command Line Tools. dox embeds Typst 0.15.1 through `typst-as-lib`, including standard text and math fonts. The desktop app and CLI compile notes in process; a separate Typst installation is no longer required. System fonts are discovered once per open library. `TYPST_FONT_PATHS`, `TYPST_IGNORE_SYSTEM_FONTS`, `TYPST_PACKAGE_PATH`, and `TYPST_PACKAGE_CACHE_PATH` configure font and package resolution. Uncached Typst Universe packages require internet access on first use.
 
 ```sh
 cd crates/dox-gui
@@ -28,6 +28,8 @@ npm run tauri build
 ```
 
 The output is under `target/release/bundle/macos/`. For a faster local build use `npm run tauri build -- --debug`; output is under `target/debug/bundle/macos/`. Distribution signing and notarization are not configured.
+
+The app icon comes from `crates/dox-gui/src-tauri/icons/icon.png`. Tauri development and release builds generate the native icon set automatically in `icons/generated/` (Git-ignored). Replace the source PNG to change the icon, or run `npm run build:icons` in `crates/dox-gui` to regenerate it directly.
 
 ## CLI
 
@@ -133,7 +135,7 @@ This Fletcher example (which uses CeTZ) has been compiled successfully with Typs
 
 Native filesystem notifications refresh the library, with a one-second polling fallback where native notifications are unavailable. Clean open notes reload automatically; dirty drafts remain intact and show a conflict notice. Saving checks both source and explicit metadata against the loaded revision. This protects ordinary external-edit conflicts; it is not a cross-process locking protocol for simultaneous writes.
 
-Startup shows the cached note tree (or a lightweight source/metadata listing on first use) and refreshes it in the background. Per-note caches track source/metadata revisions, compiler settings, and the dependency file stamps reported by Typst, including imports and assets. Changing one note does not recompile unrelated notes. Link-target diagnostics are rechecked independently of compilation. Failed compilations are cached until library inputs or compiler settings change. The index computes the library fingerprint once per pass, and per-note locks prevent duplicate concurrent compilation of the same note. Generated HTML and indexes live under `.cache`. Source documents and `meta.json` remain the source of truth. The app adds `/.cache/` and `/.trash/` to the library's `.gitignore`, preserving existing ignore rules. It never initializes or operates Git itself.
+Startup shows the cached note tree (or a lightweight source/metadata listing on first use) and refreshes it in the background. Per-note caches track source/metadata revisions, compiler settings, and file stamps from the embedded compiler’s per-compilation snapshot, including imports, packages, and assets. Changing one note does not recompile unrelated notes. Link-target diagnostics are rechecked independently of compilation. Failed compilations are cached until library inputs or compiler settings change. The index computes the library fingerprint once per pass, and per-note locks prevent duplicate concurrent compilation of the same note. Generated HTML and indexes live under `.cache`. Source documents and `meta.json` remain the source of truth. The app adds `/.cache/` and `/.trash/` to the library's `.gitignore`, preserving existing ignore rules. It never initializes or operates Git itself.
 
 ## Verify
 
@@ -144,7 +146,7 @@ cd crates/dox-gui
 npm run build
 ```
 
-Integration tests require Typst and cover creation, revision conflicts, merged metadata, computed links, math and SVG output, malformed notes, path containment, and external-change watching. AI, advanced reference management, cross-library links, and dedicated Git operations are deferred as specified in `TARGET.md`.
+Existing integration tests still include a legacy external-Typst availability check; application rendering uses the embedded compiler. They cover creation, revision conflicts, merged metadata, computed links, math and SVG output, malformed notes, path containment, and external-change watching. AI, advanced reference management, cross-library links, and dedicated Git operations are deferred as specified in `TARGET.md`.
 
 ## Deletion and diagnostics
 

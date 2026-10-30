@@ -22,96 +22,109 @@ fn error(e: impl std::fmt::Display) -> String {
 fn fuzzy_find(query: String, candidates: Vec<Vec<String>>) -> Vec<dox_core::FuzzyResult> {
     dox_core::fuzzy_find(&query, &candidates)
 }
-#[tauri::command(async)]
-fn open_library(
-    path: String,
-    app: tauri::AppHandle,
+// Embedded compilation and blocking package downloads belong on worker threads,
+// including dropping an old compiler when switching libraries.
+async fn with_library<T, E>(
     state: State<'_, Mutex<Session>>,
-) -> Result<String, String> {
-    let lib = Library::init(path).map_err(error)?;
-    let handle = app.clone();
-    let watcher = lib
-        .watch(move || {
-            let _ = handle.emit("library-changed", ());
-        })
-        .map_err(error)?;
-    let root = lib.root().to_string_lossy().into_owned();
-    let mut session = state.lock().map_err(error)?;
-    session.watcher = Some(watcher);
-    session.library = Some(lib);
-    Ok(root)
+    action: impl FnOnce(Library) -> Result<T, E> + Send + 'static,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+{
+    let library = library(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        action(library).map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(error)?
 }
-#[tauri::command(async)]
-fn cached_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
-    library(&state)?.cached_index().map_err(error)
+#[tauri::command]
+async fn open_library(path: String, app: tauri::AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = Library::init(path).map_err(error)?;
+        let handle = app.clone();
+        let watcher = lib
+            .watch(move || {
+                let _ = handle.emit("library-changed", ());
+            })
+            .map_err(error)?;
+        let root = lib.root().to_string_lossy().into_owned();
+        let state = app.state::<Mutex<Session>>();
+        let mut session = state.lock().map_err(error)?;
+        session.watcher = Some(watcher);
+        session.library = Some(lib);
+        Ok(root)
+    })
+    .await
+    .map_err(error)?
 }
-#[tauri::command(async)]
-fn list_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
-    library(&state)?.index().map_err(error)
+#[tauri::command]
+async fn cached_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
+    with_library(state, |library| library.cached_index()).await
 }
-#[tauri::command(async)]
-fn read_note(id: String, state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
-    library(&state)?.read(&id).map_err(error)
+#[tauri::command]
+async fn list_notes(state: State<'_, Mutex<Session>>) -> Result<LibraryIndex, String> {
+    with_library(state, |library| library.index()).await
 }
-#[tauri::command(async)]
-fn create_note(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
-    library(&state)?.create_untitled().map_err(error)
+#[tauri::command]
+async fn read_note(id: String, state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
+    with_library(state, move |library| library.read(&id)).await
 }
-#[tauri::command(async)]
-fn create_literature(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
-    library(&state)?.create_literature().map_err(error)
+#[tauri::command]
+async fn create_note(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
+    with_library(state, |library| library.create_untitled()).await
+}
+#[tauri::command]
+async fn create_literature(state: State<'_, Mutex<Session>>) -> Result<NoteDocument, String> {
+    with_library(state, |library| library.create_literature()).await
 }
 #[tauri::command]
 async fn import_publication(
     input: String,
     state: State<'_, Mutex<Session>>,
 ) -> Result<NoteDocument, String> {
-    let library = library(&state)?;
-    tauri::async_runtime::spawn_blocking(move || library.import_publication(&input))
-        .await
-        .map_err(error)?
-        .map_err(|error| format!("{error:#}"))
+    with_library(state, move |library| library.import_publication(&input)).await
 }
-#[tauri::command(async)]
-fn save_note(
+#[tauri::command]
+async fn save_note(
     id: String,
     source: String,
     revision: String,
     state: State<'_, Mutex<Session>>,
 ) -> Result<NoteDocument, String> {
-    library(&state)?
-        .save(&id, &source, &revision)
-        .map_err(error)
+    with_library(state, move |library| library.save(&id, &source, &revision)).await
 }
-#[tauri::command(async)]
-fn set_note_pinned(
+#[tauri::command]
+async fn set_note_pinned(
     id: String,
     pinned: bool,
     revision: String,
     state: State<'_, Mutex<Session>>,
 ) -> Result<NoteDocument, String> {
-    library(&state)?
-        .set_pinned(&id, pinned, &revision)
-        .map_err(error)
+    with_library(state, move |library| {
+        library.set_pinned(&id, pinned, &revision)
+    })
+    .await
 }
-#[tauri::command(async)]
-fn delete_note(
+#[tauri::command]
+async fn delete_note(
     id: String,
     revision: String,
     state: State<'_, Mutex<Session>>,
 ) -> Result<DeletedNote, String> {
-    library(&state)?.delete(&id, &revision).map_err(error)
+    with_library(state, move |library| library.delete(&id, &revision)).await
 }
-#[tauri::command(async)]
-fn restore_note(
+#[tauri::command]
+async fn restore_note(
     trash_entry: String,
     state: State<'_, Mutex<Session>>,
 ) -> Result<NoteDocument, String> {
-    library(&state)?.restore(&trash_entry).map_err(error)
+    with_library(state, move |library| library.restore(&trash_entry)).await
 }
-#[tauri::command(async)]
-fn render_note(id: String, state: State<'_, Mutex<Session>>) -> Result<String, String> {
-    library(&state)?.render(&id).map_err(error)
+#[tauri::command]
+async fn render_note(id: String, state: State<'_, Mutex<Session>>) -> Result<String, String> {
+    with_library(state, move |library| library.render(&id)).await
 }
 fn main() {
     tauri::Builder::default()

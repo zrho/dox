@@ -117,6 +117,7 @@ impl PublicationIdentifier {
 pub(crate) fn lookup(input: &str) -> Result<String> {
     let identifier = PublicationIdentifier::parse(input)?;
     let client = Client::builder()
+        .tls_backend_native()
         .user_agent(concat!(
             "dox/",
             env!("CARGO_PKG_VERSION"),

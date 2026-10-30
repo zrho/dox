@@ -1,11 +1,11 @@
 //! Filesystem libraries shared by the desktop app and CLI.
+mod compiler;
 mod diagnostics;
 mod fuzzy;
 pub use fuzzy::{FuzzyMatch, FuzzyResult, fuzzy_find};
 mod literature;
 mod publication;
 use anyhow::{Context, Result, bail, ensure};
-use diagnostics::compiler_diagnostics;
 pub use diagnostics::{Diagnostic, DiagnosticAction, Severity};
 use dom_query::Document as HtmlDocument;
 use notify::{RecursiveMode, Watcher};
@@ -21,7 +21,6 @@ use std::{
     fs,
     io::Write,
     path::{Component, Path, PathBuf},
-    process::{Command, Stdio},
     time::SystemTime,
 };
 
@@ -71,6 +70,7 @@ pub struct DeletedNote {
 #[derive(Debug, Clone)]
 pub struct Library {
     root: PathBuf,
+    compiler: Arc<compiler::Compiler>,
     note_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
 }
 
@@ -103,70 +103,15 @@ struct CachedNote {
 }
 const SVG_MATH: &str = include_str!("math-svg.typ");
 
-/// Finder-launched macOS apps don't inherit the user's shell PATH. Keep the
-/// explicit override authoritative, then search PATH and standard install paths.
-fn typst_executable() -> PathBuf {
-    let override_program = std::env::var_os("DOX_TYPST");
-    let program = override_program.clone().unwrap_or_else(|| "typst".into());
-    let path = PathBuf::from(&program);
-    if path.components().count() > 1 {
-        return path;
-    }
-    if let Some(found) = std::env::var_os("PATH").and_then(|paths| {
-        std::env::split_paths(&paths)
-            .map(|dir| dir.join(&program))
-            .find(|path| is_executable_file(path))
-    }) {
-        return found;
-    }
-    #[cfg(target_os = "macos")]
-    if override_program.is_none() {
-        let mut candidates = vec![
-            PathBuf::from("/opt/homebrew/bin/typst"),
-            PathBuf::from("/usr/local/bin/typst"),
-            PathBuf::from("/opt/local/bin/typst"),
-        ];
-        if let Some(home) = std::env::var_os("HOME") {
-            candidates.push(PathBuf::from(home).join(".cargo/bin/typst"));
-        }
-        if let Some(found) = candidates.into_iter().find(|path| is_executable_file(path)) {
-            return found;
-        }
-    }
-    path
-}
-
-fn is_executable_file(path: &Path) -> bool {
-    let Ok(metadata) = fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    true
-}
-
 fn compiler_key() -> String {
     let mut settings = std::env::vars_os()
         .filter(|(key, _)| {
             let key = key.to_string_lossy();
-            key.starts_with("TYPST_")
-                || matches!(key.as_ref(), "DOX_TYPST" | "PATH" | "SOURCE_DATE_EPOCH")
+            key.starts_with("TYPST_") || key == "SOURCE_DATE_EPOCH"
         })
         .collect::<Vec<_>>();
     settings.sort();
-    let program = typst_executable();
-    let stamp = FileStamp::read(program.clone()).ok();
-    digest(
-        format!("literature-v3-content-dates:{SVG_MATH}:{program:?}:{settings:?}:{stamp:?}")
-            .as_bytes(),
-    )
+    digest(format!("{}:{SVG_MATH}:{settings:?}", compiler::VERSION).as_bytes())
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -241,6 +186,7 @@ impl Library {
             .context("Library directory does not exist")?;
         ensure!(root.is_dir(), "Library must be a directory");
         Ok(Self {
+            compiler: Arc::new(compiler::Compiler::new(root.clone())),
             root,
             note_locks: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -286,22 +232,6 @@ impl Library {
             "Source document escapes note directory"
         );
         Ok((doc, meta))
-    }
-    fn typst(&self, verb: &str, doc: &Path) -> Command {
-        let mut command = Command::new(typst_executable());
-        let prepared = if doc.extension().is_some_and(|ext| ext == "typ") && doc.is_absolute() {
-            self.citation_document(doc)
-                .unwrap_or_else(|_| doc.to_owned())
-        } else {
-            doc.to_owned()
-        };
-        command
-            .arg(verb)
-            .arg(prepared)
-            .args(["--root"])
-            .arg(&self.root)
-            .args(["--features", "html", "--diagnostic-format", "short"]);
-        command
     }
     /// Stable generated wrapper preserves the original document's relative imports.
     fn citation_document(&self, doc: &Path) -> Result<PathBuf> {
@@ -364,32 +294,6 @@ impl Library {
         }
         Ok(path)
     }
-    fn query(
-        &self,
-        doc: &Path,
-        selector: &str,
-        id: &str,
-        diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<Value> {
-        let output = self
-            .typst("query", doc)
-            .args([selector, "--target", "html"])
-            .output()
-            .context(
-                "Could not run Typst; install Typst 0.14+ and put it on PATH (or set DOX_TYPST)",
-            )?;
-        diagnostics.extend(compiler_diagnostics(
-            &output.stderr,
-            id,
-            &doc.to_string_lossy(),
-        ));
-        ensure!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        Ok(serde_json::from_slice(&output.stdout)?)
-    }
     fn fingerprint(&self) -> Result<String> {
         fn visit(path: &Path, hash: &mut Sha256) -> Result<()> {
             let mut entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
@@ -412,7 +316,7 @@ impl Library {
         }
         let mut hash = Sha256::new();
         hash.update(b"dox-index-v4-link-validation");
-        hash.update(std::env::var("DOX_TYPST").unwrap_or_default());
+        hash.update(compiler::VERSION.as_bytes());
         visit(&self.root, &mut hash)?;
         Ok(format!("{:x}", hash.finalize()))
     }
@@ -436,7 +340,6 @@ impl Library {
         let _guard = lock
             .lock()
             .map_err(|_| anyhow::anyhow!("Note lock unavailable"))?;
-        let started = SystemTime::now();
         let (path, explicit) = self.paths(id)?;
         let source = fs::read_to_string(&path)?;
         if explicit.kind == "typst" {
@@ -483,12 +386,14 @@ impl Library {
         let mut diagnostics = vec![];
         let mut links = BTreeSet::new();
         let mut link_destinations = BTreeSet::new();
+        let mut compiled = None;
+        let mut title_dependencies = Some(vec![]);
         if explicit.kind == "typst" {
-            match self.query(&path, "metadata", id, &mut diagnostics) {
-                Ok(Value::Array(items)) => {
+            match self.compile_document(&path, id, &mut diagnostics) {
+                Ok(output) => {
                     let mut derived = Map::new();
                     let mut source_date = None;
-                    for item in items {
+                    for item in &output.metadata {
                         if item.get("label").and_then(Value::as_str) == Some("<dox-date>") {
                             source_date = item.get("value").cloned();
                         }
@@ -505,9 +410,9 @@ impl Library {
                         derived.insert("date".into(), date);
                     }
                     metadata.fields = derived;
+                    compiled = Some(output);
                 }
-                Err(e) => diagnostic = Some(e.to_string()),
-                _ => {}
+                Err(error) => diagnostic = Some(error.to_string()),
             }
         }
 
@@ -549,7 +454,11 @@ impl Library {
         let mut title_text = title.clone();
         let mut title_html = None;
         if explicit.kind == "typst" && diagnostic.is_none() {
-            match self.compile_html(&path, id, &mut diagnostics) {
+            match compiled
+                .as_ref()
+                .map(|output| output.html.clone())
+                .context("Missing compiled note")
+            {
                 Ok(html) => {
                     fs::create_dir_all(&cache)?;
                     atomic_write(&cache.join("note.html"), html.as_bytes())?;
@@ -570,7 +479,7 @@ impl Library {
                     let rendered = if let Some(markup) = metadata_title.filter(|markup| {
                         !heading.exists() || Some(*markup) != heading_source.as_deref()
                     }) {
-                        self.compile_title(markup, id, &mut diagnostics)
+                        self.compile_title(markup, id, &mut diagnostics, &mut title_dependencies)
                     } else if heading.exists() {
                         Ok((
                             heading.inner_html().to_string(),
@@ -624,8 +533,8 @@ impl Library {
             }
         }
         if explicit.kind == "typst" {
-            if let Ok(Value::Array(items)) = self.query(&path, "cite", id, &mut vec![]) {
-                for item in items {
+            if let Some(output) = &compiled {
+                for item in &output.citations {
                     if let Some(key) = item.get("key").and_then(Value::as_str) {
                         let key = key.trim_matches(['<', '>']);
                         if valid_id(key) {
@@ -732,7 +641,13 @@ impl Library {
         let dependencies = if explicit.kind != "typst" {
             Some(vec![])
         } else {
-            self.dependency_stamps(id, started)
+            compiled
+                .take()
+                .and_then(|output| output.dependencies)
+                .and_then(|mut dependencies| {
+                    dependencies.extend(title_dependencies?);
+                    Some(dependencies)
+                })
         };
         let entry = CachedNote {
             version: 1,
@@ -744,32 +659,6 @@ impl Library {
         fs::create_dir_all(&cache)?;
         atomic_write(&cache.join("metadata.json"), &serde_json::to_vec(&entry)?)?;
         Ok(NoteDocument { note, source })
-    }
-    fn dependency_stamps(&self, id: &str, started: SystemTime) -> Option<Vec<FileStamp>> {
-        let bytes = fs::read(self.root.join(".cache").join(id).join("dependencies.bin")).ok()?;
-        let mut stamps = vec![];
-        for path in bytes
-            .split(|byte| *byte == 0)
-            .filter(|path| !path.is_empty())
-        {
-            let path = PathBuf::from(std::str::from_utf8(path).ok()?);
-            let path = if path.is_absolute() {
-                path
-            } else {
-                std::env::current_dir().ok()?.join(path)
-            };
-            let stamp = FileStamp::read(path).ok()?;
-            // An input modified during compilation needs another pass, not a reusable cache.
-            if stamp.modified > started {
-                return None;
-            }
-            stamps.push(stamp);
-        }
-        if stamps.is_empty() {
-            None
-        } else {
-            Some(stamps)
-        }
     }
     fn refresh_link_diagnostics(&self, note: &mut Note, source: &str) {
         note.diagnostics
@@ -1145,31 +1034,23 @@ impl Library {
         self.read(id)
     }
 
+    fn compile_document(
+        &self,
+        path: &Path,
+        id: &str,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Result<compiler::CompiledDocument> {
+        let prepared = self.citation_document(path)?;
+        self.compiler.compile(&prepared, None, id, diagnostics)
+    }
+
     fn compile_html(
         &self,
-        doc: &Path,
+        path: &Path,
         id: &str,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<String> {
-        let cache = self.root.join(".cache").join(id);
-        fs::create_dir_all(&cache)?;
-        let output = self
-            .typst("compile", doc)
-            .args(["-", "--format", "html", "--deps-format", "zero", "--deps"])
-            .arg(cache.join("dependencies.bin"))
-            .output()
-            .context("Could not run Typst; install Typst 0.14+ (or set DOX_TYPST)")?;
-        diagnostics.extend(compiler_diagnostics(
-            &output.stderr,
-            id,
-            &doc.to_string_lossy(),
-        ));
-        ensure!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        Ok(String::from_utf8(output.stdout)?)
+        Ok(self.compile_document(path, id, diagnostics)?.html)
     }
 
     fn compile_title(
@@ -1177,25 +1058,18 @@ impl Library {
         markup: &str,
         id: &str,
         diagnostics: &mut Vec<Diagnostic>,
+        dependencies: &mut Option<Vec<FileStamp>>,
     ) -> Result<(String, String)> {
-        let mut child = self
-            .typst("compile", Path::new("-"))
-            .args(["-", "--format", "html"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Could not run Typst for title")?;
         let source = format!(
             "{SVG_MATH}\n#html.elem(\"span\", attrs: (\"data-dox-title\": \"\"))[{markup}]\n"
         );
-        child
-            .stdin
-            .take()
-            .context("Missing Typst stdin")?
-            .write_all(source.as_bytes())?;
-        let output = child.wait_with_output()?;
-        let mut title_diagnostics = compiler_diagnostics(&output.stderr, id, "meta.json");
+        let mut title_diagnostics = vec![];
+        let result = self.compiler.compile(
+            &self.root.join(".cache").join(id).join("title.typ"),
+            Some(&source),
+            id,
+            &mut title_diagnostics,
+        );
         for diagnostic in &mut title_diagnostics {
             diagnostic.code = if diagnostic.severity == Severity::Error {
                 "typst-title".into()
@@ -1207,12 +1081,9 @@ impl Library {
             diagnostic.column = None;
         }
         diagnostics.extend(title_diagnostics);
-        ensure!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let html = String::from_utf8(output.stdout)?;
+        let output = result?;
+        *dependencies = output.dependencies;
+        let html = output.html;
         let document = HtmlDocument::from(html.as_str());
         let title = document.select_single("[data-dox-title]");
         ensure!(title.exists(), "Compiled title is missing");
