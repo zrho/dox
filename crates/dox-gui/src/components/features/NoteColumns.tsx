@@ -8,12 +8,14 @@ import {
   Show,
 } from "solid-js";
 import X from "lucide-solid/icons/x";
+import Paperclip from "lucide-solid/icons/paperclip";
 import Button from "../ui/Button";
 import NoteTitle, { titleText } from "./NoteTitle";
 import NoteWorkspace from "./NoteWorkspace";
 import BacklinksPanel from "./BacklinksPanel";
 import AttachmentsPanel from "./AttachmentsPanel";
 import { createColumnDrag } from "../../hooks/createColumnDrag";
+import { createAttachmentDrop } from "../../hooks/createAttachmentDrop";
 import type { Note, NoteColumn } from "../../types";
 
 const MAX_WIDTH = 520;
@@ -29,6 +31,8 @@ export default function NoteColumns(props: {
   onMove: (key: number, index: number) => void;
   onClose: (key: number) => void;
   onAttach: (id: string) => void;
+  onDropFiles: (id: string, paths: string[]) => void;
+  onError: (error: unknown) => void;
   onOpenAttachment: (id: string, name: string) => void;
   onRemoveAttachment: (id: string, name: string) => void;
   onNavigate: (id: string, fromKey: number) => void;
@@ -57,6 +61,28 @@ export default function NoteColumns(props: {
     onActivate: props.onActivate,
     onMove: props.onMove,
   });
+  const fileDrop = createAttachmentDrop({
+    enabled: () => !props.busy && !drag.interacting(),
+    targetAt: (x, y) => {
+      const panel = document.elementFromPoint(x, y)
+        ?.closest<HTMLElement>("[data-note-column-key]");
+      if (!panel || !viewport.contains(panel)) return;
+      const key = Number(panel.dataset.noteColumnKey);
+      return props.columns.some((column) => column.key === key) ? key : undefined;
+    },
+    onDrop: (key, paths) => {
+      const column = props.columns.find((column) => column.key === key);
+      if (!column) return;
+      props.onActivate(key);
+      props.onDropFiles(column.document.note.id, paths);
+    },
+    onError: props.onError,
+  });
+  function preventFileDropDefault(event: DragEvent) {
+    // Let the native drop handler attach the files rather than letting an
+    // editor insert their paths or the browser navigate to a dropped file.
+    if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+  }
   let revealRequest = 0;
   createEffect(() => {
     const index = props.columns.findIndex(
@@ -84,6 +110,8 @@ export default function NoteColumns(props: {
       class="relative min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain bg-panel [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       classList={{ "select-none": drag.draggingKey() !== undefined }}
       aria-label="Note columns"
+      onDragOver={preventFileDropDefault}
+      onDrop={preventFileDropDefault}
     >
       <div class="relative mx-auto h-full" style={{ width: `${props.columns.length * columnWidth()}px` }}>
         <For each={props.columns}>
@@ -93,6 +121,7 @@ export default function NoteColumns(props: {
               width={columnWidth()}
               left={drag.left(column.key, index())}
               dragging={drag.draggingKey() === column.key}
+              dropTarget={fileDrop.target() === column.key}
               active={props.activeKey === column.key}
               busy={props.busy}
               notes={props.notes}
@@ -125,6 +154,7 @@ function NoteColumnPanel(props: {
   width: number;
   left: number;
   dragging: boolean;
+  dropTarget: boolean;
   active: boolean;
   busy: boolean;
   notes: Note[];
@@ -152,6 +182,7 @@ function NoteColumnPanel(props: {
   );
   return (
     <section
+      data-note-column-key={props.column.key}
       class="absolute top-0 left-0 flex h-full flex-col border-t-2 border-r border-border bg-background motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
       classList={{
         "border-t-accent": props.active,
@@ -185,6 +216,17 @@ function NoteColumnPanel(props: {
         if (!pointerDown) props.onActivate();
       }}
     >
+      <Show when={props.dropTarget}>
+        <div
+          role="status"
+          class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border-2 border-accent bg-selection/60"
+        >
+          <div class="flex items-center gap-2 rounded border border-border-strong bg-popover px-3 py-2 text-xs text-foreground shadow-md">
+            <Paperclip size={16} strokeWidth={1.5} aria-hidden="true" />
+            Drop files to attach
+          </div>
+        </div>
+      </Show>
       <header
         class="flex h-7 shrink-0 items-center gap-2 border-b border-border px-2"
       >

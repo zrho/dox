@@ -16,6 +16,8 @@ Open the command panel with ⌘⇧P and choose **Open library**, then choose an 
 
 The sidebar starts collapsed; use ⌘B to show pinned items. Note columns are at most 520px wide and scroll horizontally with a hidden scrollbar. Drag a pane by its title to reorder it; neighbouring panes slide aside and the pane settles into place on release. Drag near either edge to scroll, or press Escape to cancel. Reordering preserves open drafts and scroll positions, and animations respect reduced-motion preferences. Viewed content uses bundled Libertinus Serif; source editing uses JetBrains Mono.
 
+Outside text fields, **h / ←** focuses the previous open pane and **l / →** the next, scrolling it into view in the current pane order and stopping at either end. These shortcuts preserve text entry and caret movement in editors, inputs, and editable content. **Escape** first dismisses error or warning messages; when editing a note, it saves and switches to view mode through the same action as ⌘E. In view mode it retains the existing pane/sidebar closing behavior. Dialogs keep their own Escape handling, and holding Escape does not cascade through several actions. Diagnostics remain separate from dismissible messages.
+
 On macOS, toolbar actions share the native title-bar area with the traffic lights. Each note column has a compact footer below backlinks, showing its ID and date when known in both edit and view modes. Drag empty space in that row to move the window, or double-click it to use the system title-bar action. Changes to native window configuration require restarting the desktop app.
 
 The desktop app enables [`tauri-plugin-macos-fps`](https://github.com/userFRM/tauri-plugin-macos-fps) to allow rendering at the display’s native refresh rate on macOS. The plugin uses a private WebKit API and is unsuitable for Mac App Store distribution.
@@ -98,6 +100,8 @@ GUI-created notes have minimal metadata and derive their titles from their headi
 
 Links use `dox:ID`. The compiler resolves links, including computed destinations, for the index. A broken draft remains editable and can retain literal links as a best-effort fallback. Missing targets are retained and reported as dangling-link errors on save/read; malformed `dox:` destinations are reported as invalid-note-link errors. Links emitted through HTML show rules are also checked from compiled HTML. Other web links are currently inert in the note viewer. Literature items use the same generated IDs as citation keys; see below.
 
+Clicking a note link, citation, or backlink focuses and reveals its existing pane, or appends a new pane at the end if the item is not open. All other panes and unsaved drafts remain open.
+
 ## Literature
 
 To import a publication, open ⌘⇧P and choose **Import publication from link or tag**. Paste one DOI, arXiv ID, or link and press Enter. The dialog accepts bare DOIs, `doi:` prefixes, `doi.org` links, current and legacy arXiv IDs (including versions), arXiv abstract/PDF/HTML links, and publisher URLs containing a DOI. arXiv DOI links (`10.48550/arXiv.…`) also work. Internet access is required: DOI metadata comes through DOI content negotiation, and arXiv metadata comes from its Atom API. The Rust core resolves and validates the reference before creating a single-entry `reference.bib` with the item's generated ID as its citation key. The imported item opens in view mode without replacing other open drafts. Failed lookups leave the dialog open with an error and create no empty items. The empty-literature command remains available for manual entry.
@@ -128,6 +132,8 @@ In a Typst note, write `@ABC12` (including optional Typst citation supplements),
 ## Attachments
 
 Any item, including a literature item, can have file attachments. Click the paperclip in the toolbar or choose **Attach files to item** in the command panel, then select one or more files. Files are copied into the item's `attachments/` directory; the originals stay where they are. Duplicate filenames receive a numbered suffix, such as `paper (2).pdf`, without overwriting existing files.
+
+You can also drag one or more files from your file manager onto a note or literature pane, in either edit or view mode. The pane under the pointer highlights as the attachment destination, even when another pane is active. Dropping uses the same copy and collision handling as the file picker and preserves editor drafts. File drops outside item panes or while an operation is busy are ignored.
 
 Items with attachments show a collapsible **ATTACHMENTS** panel beneath backlinks in both edit and view modes. Click a filename to open it in the system's default application (for example, Preview for PDFs). The panel's plus button attaches more files, and its remove button asks before deleting the library's copy. Attaching or removing files preserves unsaved source edits. Files added or removed externally also refresh in the panel. Attachments move with the item when it is deleted or restored.
 

@@ -11,6 +11,7 @@ export function createDesktopLifecycle(options: {
   busy: () => boolean;
   modalOpen: () => boolean;
   editorFocused: () => boolean;
+  dismissMessage: () => boolean;
   onChange: () => Promise<void>;
   onCommand: (id: CommandId) => void;
   onRestoreLibrary: (path: string) => Promise<void>;
@@ -50,9 +51,19 @@ export function createDesktopLifecycle(options: {
         else unlisten = fn;
       })
       .catch(options.onError);
+    const escapeBinding = commandDefinitions.find((command) => command.id === "escape")?.binding;
+    const onKeyCapture = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || options.modalOpen() || !matchesBinding(event, escapeBinding)) return;
+      // Messages have priority even when focus is inside a disclosure or editor.
+      // Held Escape must not dismiss one thing and then close another.
+      if (event.repeat || options.dismissMessage()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
     const onKey = (event: KeyboardEvent) => {
       // Nested controls get the first chance to dismiss themselves.
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || options.modalOpen()) return;
       const command = commandDefinitions.find((command) =>
         matchesBinding(
           event,
@@ -62,8 +73,7 @@ export function createDesktopLifecycle(options: {
       if (!command) return;
       event.preventDefault();
       if (
-        options.modalOpen() ||
-        (command.id === "close" && event.repeat) ||
+        ((command.id === "close" || command.id === "escape") && event.repeat) ||
         ((command.id === "insert" || command.id === "insert-with-title") &&
           !options.editorFocused())
       )
@@ -76,6 +86,7 @@ export function createDesktopLifecycle(options: {
         event.returnValue = "";
       }
     };
+    window.addEventListener("keydown", onKeyCapture, true);
     window.addEventListener("keydown", onKey);
     window.addEventListener("beforeunload", beforeUnload);
     const last = localStorage.getItem("dox.library");
@@ -85,6 +96,7 @@ export function createDesktopLifecycle(options: {
       clearTimeout(timer);
       unlisten?.();
       unlistenClose?.();
+      window.removeEventListener("keydown", onKeyCapture, true);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("beforeunload", beforeUnload);
     });

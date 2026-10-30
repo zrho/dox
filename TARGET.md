@@ -31,12 +31,14 @@
 
 - Note content and connections
   - Support file attachments for all item types. Copy files into each item's `attachments/` directory, preserve filenames with collision suffixes, and show a collapsible panel beneath backlinks. Open attachments in the system's default app and confirm removal of the library's copy; keep unsaved source edits intact. Include attachments when deleting/restoring an item and refresh externally changed files.
+    - Accept native file drops onto the pane under the pointer, in edit and view modes, with a visible drop destination. Use the existing attachment import path, preserve drafts, and ignore drops outside panes or during other operations.
   - Typst is the default writing format, compiled to HTML for viewing.
   - Render equations as SVG through Typst `html.frame` in both documents and titles, preserving inline/display layout and avoiding nested conversion inside existing diagram frames.
   - Prioritize working math and diagram support, including packages such as CeTZ and Fletcher.
   - HTML output need not reproduce PDF layout exactly.
   - Render sanitized note HTML directly in the app with Shadow DOM style isolation; do not use iframes. Preserve MathML/SVG output and route note links through app navigation.
   - Support links between notes, tags, and backlinks.
+  - Clicking note links, citations, or backlinks focuses and reveals an existing pane or appends a new one, preserving all open panes and unsaved drafts.
   - Initially express note links as ordinary links in Typst; frontend JavaScript turns them into in-app navigation actions.
   - Literature items have type `literature` and contain one bibliographic reference per note, backed by a BibTeX file instead of a Typst file.
     - Automatically attach the PDF for arXiv imports, preserving the reference with a warning if the download fails. Provide a Find and attach paper PDF command for the focused literature item, using its current BibTeX draft without saving it. Resolve explicit arXiv identifiers or conservatively match arXiv title/author/DOI metadata; reject ambiguous matches, incomplete downloads, and non-PDF responses. Reuse identical attached PDFs. Keep PDF source resolution separate from general attachment storage for future providers.
@@ -57,6 +59,7 @@
   - Support editing both inside dox and in external editors.
   - Allow dragging panes by their titles to reorder them with CSS transitions, edge scrolling, and Escape cancellation. Preserve mounted editors, drafts, and scroll state; respect reduced-motion preferences.
   - GUI switches between editing and viewing modes with Command-E or one icon button (pencil to edit, eye to view); live preview is not required.
+  - Escape dismisses transient error/warning messages first, then exits editing through the same save/view action as Command-E; retain contextual dialog, disclosure, sidebar, and viewed-pane dismissal. Ignore held Escape repeats. Use h/Left and l/Right to focus and reveal adjacent open panes in visual order without wrapping, leaving text fields and their caret movement alone. Define and display both shortcut alternatives in the central command registry.
   - Command-K while focusing the editor opens a fuzzy note picker and inserts a Typst link at the selection, then returns focus to the editor. Selecting a literature item inserts `@ID` instead. Command-Shift-K uses the same picker and includes the publication title before its citation, escaping Typst characters in bibliographic titles.
   - Use compact toolbar and content padding; show backlinks without a separate outgoing-links panel.
   - Backlinks and diagnostics share a compact, collapsible note-info panel with subtle uppercase headings. Hide the backlinks panel when there are no backlinks.

@@ -103,6 +103,8 @@ export default function LibraryPage() {
         onMove={app.moveColumn}
         onClose={app.closeColumn}
         onAttach={app.attachFiles}
+        onDropFiles={app.attachFiles}
+        onError={app.reportError}
         onOpenAttachment={app.openAttachment}
         onRemoveAttachment={app.removeAttachment}
         onNavigate={app.openLinked}

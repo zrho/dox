@@ -226,6 +226,32 @@ export function createLibrarySession() {
     const key = activeKey();
     if (key !== undefined) closeColumn(key);
   }
+  function dismissMessage() {
+    if (error()) {
+      setError("");
+      return true;
+    }
+    if (warning()) {
+      setWarning("");
+      return true;
+    }
+    return false;
+  }
+  function escapeFocused() {
+    if (dismissMessage() || busy()) return;
+    if (sidebarVisible() && sidebar?.contains(document.activeElement)) {
+      toggleSidebar();
+    } else if (current() && mode() === "edit") {
+      void run(view);
+    } else {
+      closeFocused();
+    }
+  }
+  function focusAdjacentPane(direction: -1 | 1) {
+    const position = columns().findIndex((column) => column.key === activeKey());
+    const next = position >= 0 ? columns()[position + direction] : undefined;
+    if (next) revealColumn(next.key);
+  }
   async function refresh() {
     const token = ++indexRequest;
     const root = library();
@@ -258,7 +284,7 @@ export function createLibrarySession() {
         : "";
     return { document, html };
   }
-  async function openPickedNote(id: string) {
+  async function openItem(id: string) {
     const focused = activeColumn();
     const existing = focused?.document.note.id === id
       ? focused
@@ -293,18 +319,8 @@ export function createLibrarySession() {
     } else addColumn(result.document, result.html, "view", 0);
   }
   async function openLinked(id: string, fromKey: number) {
-    const from = columns().findIndex((column) => column.key === fromKey);
-    if (from < 0) return;
-    const existing = columns().find((column) => column.document.note.id === id);
-    if (existing) {
-      revealColumn(existing.key);
-      return;
-    }
-    if (!(await confirmDiscard(columns().slice(from + 1)))) return;
-    const token = ++request;
-    const result = await readColumn(id);
-    if (token === request)
-      addColumn(result.document, result.html, "view", from + 1);
+    if (!columns().some((column) => column.key === fromKey)) return;
+    await openItem(id);
   }
   async function preview(id: string, token = request) {
     if (current()?.note.id === id && current()?.note.diagnostic) {
@@ -361,8 +377,8 @@ export function createLibrarySession() {
       updateColumn(column.key, { document: { ...column.document, attachments } });
     }
   }
-  async function attachFiles(id: string) {
-    const paths = await open({ multiple: true, title: "Attach files" });
+  async function attachFiles(id: string, droppedPaths?: string[]) {
+    const paths = droppedPaths ?? await open({ multiple: true, title: "Attach files" });
     if (!paths?.length) return;
     try {
       await invoke<void>("attach_files", { id, paths });
@@ -516,6 +532,7 @@ export function createLibrarySession() {
     // Keep the editor visible until the rendered result is ready.
     await preview(current()!.note.id);
     setMode("view");
+    queueMicrotask(focusActive);
   }
   function edit() {
     if (!current()) return;
@@ -564,7 +581,7 @@ export function createLibrarySession() {
   }
   function selectNote(id: string) {
     if (pickerMode() === "open") {
-      void run(() => openPickedNote(id));
+      void run(() => openItem(id));
       return;
     }
     const target = index().notes.find((note) => note.id === id);
@@ -687,6 +704,9 @@ export function createLibrarySession() {
     },
     find: openPicker,
     close: closeFocused,
+    escape: escapeFocused,
+    "previous-pane": () => focusAdjacentPane(-1),
+    "next-pane": () => focusAdjacentPane(1),
     "new-note": () => create(),
     "new-window": () => {
       void invoke<void>("new_window").catch((error) => setError(String(error)));
@@ -730,6 +750,7 @@ export function createLibrarySession() {
   };
   function commandEnabled(id: CommandId) {
     if (id === "new-window") return true;
+    if (id === "escape" && (error() || warning())) return true;
     if (id === "zoom-in" || id === "zoom-out" || id === "zoom-reset")
       return !!current();
     if (busy()) return false;
@@ -746,7 +767,14 @@ export function createLibrarySession() {
       case "undo-delete":
         return !!lastDeleted();
       case "close":
+      case "escape":
         return !!current() || sidebarVisible();
+      case "previous-pane":
+        return columns().findIndex((column) => column.key === activeKey()) > 0;
+      case "next-pane": {
+        const position = columns().findIndex((column) => column.key === activeKey());
+        return position >= 0 && position < columns().length - 1;
+      }
       case "insert":
       case "insert-with-title":
         return (
@@ -790,6 +818,9 @@ export function createLibrarySession() {
         "insert-with-title",
         "toggle-sidebar",
         "close",
+        "escape",
+        "previous-pane",
+        "next-pane",
         "edit",
         "zoom-in",
         "zoom-out",
@@ -847,6 +878,7 @@ export function createLibrarySession() {
     busy,
     modalOpen: () => pickerOpen() || commandPanelOpen() || publicationImportOpen(),
     editorFocused: () => document.activeElement === editor(),
+    dismissMessage,
     onChange: () => run(syncFromDisk),
     onCommand: executeCommand,
     onRestoreLibrary: (path) => run(() => openLibrary(path)),
@@ -863,7 +895,8 @@ export function createLibrarySession() {
     activateColumn,
     moveColumn,
     closeColumn,
-    attachFiles: (id: string) => { void run(() => attachFiles(id)); },
+    attachFiles: (id: string, paths?: string[]) => { void run(() => attachFiles(id, paths)); },
+    reportError: (error: unknown) => setError(String(error)),
     openAttachment: (id: string, name: string) => {
       void run(() => invoke<void>("open_attachment", { id, name }));
     },

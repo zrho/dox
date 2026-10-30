@@ -13,10 +13,31 @@
     }
   },
   "close": {
-    "title": "Close focused pane",
+    "title": "Close focused pane"
+  },
+  "escape": {
+    "title": "Dismiss or close",
     "binding": {
       "key": "escape",
       "primary": false
+    }
+  },
+  "previous-pane": {
+    "title": "Focus previous note",
+    "binding": {
+      "key": "h",
+      "aliases": ["arrowleft"],
+      "primary": false,
+      "allowInTextFields": false
+    }
+  },
+  "next-pane": {
+    "title": "Focus next note",
+    "binding": {
+      "key": "l",
+      "aliases": ["arrowright"],
+      "primary": false,
+      "allowInTextFields": false
     }
   },
   "new-note": {
