@@ -1,7 +1,7 @@
 import { batch, createMemo, createSignal } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import {
   commandDefinitions,
   type CommandId,
@@ -106,10 +106,19 @@ export function createLibrarySession() {
   const columnDirty = (column: NoteColumn) =>
     column.source !== column.document.source;
   const anyDirty = () => columns().some(columnDirty);
-  function confirmDiscard(removed: NoteColumn[]) {
-    return (
-      !removed.some(columnDirty) ||
-      window.confirm("Discard unsaved drafts in the columns being closed?")
+  async function confirmDiscard(removed: NoteColumn[]) {
+    const unsaved = removed.filter(columnDirty);
+    if (!unsaved.length) return true;
+    return confirm(
+      unsaved.length === 1
+        ? `Discard unsaved changes to “${titleText(unsaved[0].document.note)}”?`
+        : `Discard unsaved changes in ${unsaved.length} panes?`,
+      {
+        title: "Unsaved changes",
+        kind: "warning",
+        okLabel: "Discard changes",
+        cancelLabel: "Keep editing",
+      },
     );
   }
   function activateColumn(key: number) {
@@ -138,13 +147,11 @@ export function createLibrarySession() {
     });
   }
   function closeColumn(key: number) {
-    if (busy()) return;
-    const column = columns().find((column) => column.key === key);
-    if (!column || !confirmDiscard([column])) return;
-    removeColumn(key);
-    queueMicrotask(() => {
-      if (mode() === "edit") editor()?.focus();
-      else main?.focus();
+    void run(async () => {
+      const column = columns().find((column) => column.key === key);
+      if (!column || !(await confirmDiscard([column]))) return;
+      removeColumn(key);
+      queueMicrotask(focusActive);
     });
   }
   function zoomContent(change: number | "reset") {
@@ -266,7 +273,7 @@ export function createLibrarySession() {
       revealColumn(existing.key);
       return;
     }
-    if (!force && !confirmDiscard(columns())) return;
+    if (!force && !(await confirmDiscard(columns()))) return;
     const token = ++request;
     const result = await readColumn(
       id,
@@ -289,7 +296,7 @@ export function createLibrarySession() {
       revealColumn(existing.key);
       return;
     }
-    if (!confirmDiscard(columns().slice(from + 1))) return;
+    if (!(await confirmDiscard(columns().slice(from + 1)))) return;
     const token = ++request;
     const result = await readColumn(id);
     if (token === request)
