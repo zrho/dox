@@ -103,6 +103,55 @@ struct CachedNote {
 }
 const SVG_MATH: &str = include_str!("math-svg.typ");
 
+/// Finder-launched macOS apps don't inherit the user's shell PATH. Keep the
+/// explicit override authoritative, then search PATH and standard install paths.
+fn typst_executable() -> PathBuf {
+    let override_program = std::env::var_os("DOX_TYPST");
+    let program = override_program.clone().unwrap_or_else(|| "typst".into());
+    let path = PathBuf::from(&program);
+    if path.components().count() > 1 {
+        return path;
+    }
+    if let Some(found) = std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|dir| dir.join(&program))
+            .find(|path| is_executable_file(path))
+    }) {
+        return found;
+    }
+    #[cfg(target_os = "macos")]
+    if override_program.is_none() {
+        let mut candidates = vec![
+            PathBuf::from("/opt/homebrew/bin/typst"),
+            PathBuf::from("/usr/local/bin/typst"),
+            PathBuf::from("/opt/local/bin/typst"),
+        ];
+        if let Some(home) = std::env::var_os("HOME") {
+            candidates.push(PathBuf::from(home).join(".cargo/bin/typst"));
+        }
+        if let Some(found) = candidates.into_iter().find(|path| is_executable_file(path)) {
+            return found;
+        }
+    }
+    path
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    true
+}
+
 fn compiler_key() -> String {
     let mut settings = std::env::vars_os()
         .filter(|(key, _)| {
@@ -112,19 +161,12 @@ fn compiler_key() -> String {
         })
         .collect::<Vec<_>>();
     settings.sort();
-    let program = std::env::var_os("DOX_TYPST").unwrap_or_else(|| "typst".into());
-    let path = PathBuf::from(&program);
-    let executable = if path.components().count() > 1 {
-        Some(path)
-    } else {
-        std::env::var_os("PATH").and_then(|paths| {
-            std::env::split_paths(&paths)
-                .map(|dir| dir.join(&program))
-                .find(|path| path.is_file())
-        })
-    };
-    let stamp = executable.and_then(|path| FileStamp::read(path).ok());
-    digest(format!("literature-v3-content-dates:{SVG_MATH}:{settings:?}:{stamp:?}").as_bytes())
+    let program = typst_executable();
+    let stamp = FileStamp::read(program.clone()).ok();
+    digest(
+        format!("literature-v3-content-dates:{SVG_MATH}:{program:?}:{settings:?}:{stamp:?}")
+            .as_bytes(),
+    )
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -246,8 +288,7 @@ impl Library {
         Ok((doc, meta))
     }
     fn typst(&self, verb: &str, doc: &Path) -> Command {
-        let mut command =
-            Command::new(std::env::var_os("DOX_TYPST").unwrap_or_else(|| "typst".into()));
+        let mut command = Command::new(typst_executable());
         let prepared = if doc.extension().is_some_and(|ext| ext == "typ") && doc.is_absolute() {
             self.citation_document(doc)
                 .unwrap_or_else(|_| doc.to_owned())

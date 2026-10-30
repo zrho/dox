@@ -4,7 +4,7 @@ A local notes app for connected mathematical writing. Rust owns the library, met
 
 ## Run
 
-Requires Rust (edition 2024), Node.js 22+, macOS Command Line Tools, and **Typst 0.14+** on `PATH` with HTML export support. Development is verified with Typst 0.15.1. Install Typst with `brew install typst`. Set `DOX_TYPST` to an executable path if needed; launch the GUI from that environment. Typst is a runtime dependency, not bundled in the app.
+Requires Rust (edition 2024), Node.js 22+, macOS Command Line Tools, and **Typst 0.14+** with HTML export support. Development is verified with Typst 0.15.1. Install Typst with `brew install typst`. dox searches `PATH`; on macOS it also checks `/opt/homebrew/bin/typst`, `/usr/local/bin/typst`, `/opt/local/bin/typst`, and `~/.cargo/bin/typst`, so Finder-launched `.app` bundles can find standard installations without shell configuration. Set `DOX_TYPST` to an executable path for a custom installation; this override takes precedence and must be present in the app's launch environment. Typst remains a runtime dependency, not bundled in the app.
 
 ```sh
 cd crates/dox-gui

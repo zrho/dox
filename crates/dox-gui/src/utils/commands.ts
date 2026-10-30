@@ -1,79 +1,79 @@
 export type Keybinding = {
-  key: string;
-  shift?: boolean;
-  /** Command on macOS or Control elsewhere; required unless explicitly false. */
-  primary?: boolean;
+    key: string;
+    shift?: boolean;
+    /** Command on macOS or Control elsewhere; required unless explicitly false. */
+    primary?: boolean;
 };
 // All application commands and their shortcuts live here. A missing shortcut
 // means the command is available through the command panel only.
 export const commandDefinitions = [
-  {
-    id: "commands",
-    title: "Show command panel",
-    binding: { key: "p", shift: true },
-  },
-  { id: "find", title: "Find note", binding: { key: "p" } },
-  {
-    id: "close",
-    title: "Close focused pane",
-    binding: { key: "escape", primary: false },
-  },
-  { id: "new-note", title: "New note", binding: { key: "n" } },
-  { id: "new-literature", title: "New empty literature item" },
-  { id: "import-publication", title: "Import publication from link or tag" },
-  { id: "open-library", title: "Open library" },
-  { id: "save", title: "Save note", binding: { key: "s" } },
-  { id: "toggle-mode", title: "Toggle edit/view", binding: { key: "e" } },
-  { id: "edit", title: "Edit source" },
-  { id: "view", title: "View note" },
-  { id: "insert", title: "Insert link or citation", binding: { key: "k" } },
-  {
-    id: "insert-with-title",
-    title: "Insert link or citation with title",
-    binding: { key: "k", shift: true },
-  },
-  { id: "copy", title: "Copy note link or citation" },
-  { id: "toggle-sidebar", title: "Toggle sidebar", binding: { key: "b" } },
-  { id: "zoom-in", title: "Zoom in content", binding: { key: "=" } },
-  { id: "zoom-out", title: "Zoom out content", binding: { key: "-" } },
-  { id: "zoom-reset", title: "Reset content zoom", binding: { key: "0" } },
-  { id: "toggle-pin", title: "Toggle pin" },
-  { id: "delete", title: "Delete note" },
-  { id: "undo-delete", title: "Undo last note deletion" },
+    {
+        id: "commands",
+        title: "Show command panel",
+        binding: { key: "p", shift: true },
+    },
+    { id: "find", title: "Find note", binding: { key: "p" } },
+    {
+        id: "close",
+        title: "Close focused pane",
+        binding: { key: "escape", primary: false },
+    },
+    { id: "new-note", title: "New note", binding: { key: "n" } },
+    { id: "new-literature", title: "New empty literature item" },
+    { id: "import-publication", title: "Import publication from link or tag" },
+    { id: "open-library", title: "Open library" },
+    { id: "save", title: "Save note", binding: { key: "s" } },
+    { id: "toggle-mode", title: "Toggle edit/view", binding: { key: "e" } },
+    { id: "edit", title: "Edit source" },
+    { id: "view", title: "View note" },
+    { id: "insert", title: "Insert link or citation", binding: { key: "k" } },
+    {
+        id: "insert-with-title",
+        title: "Insert link or citation with title",
+        binding: { key: "k", shift: true },
+    },
+    { id: "copy", title: "Copy note link or citation" },
+    { id: "toggle-sidebar", title: "Toggle sidebar", binding: { key: "b" } },
+    { id: "zoom-in", title: "Zoom in content", binding: { key: "=" } },
+    { id: "zoom-out", title: "Zoom out content", binding: { key: "-" } },
+    { id: "zoom-reset", title: "Reset content zoom", binding: { key: "0" } },
+    { id: "toggle-pin", title: "Toggle pin" },
+    { id: "delete", title: "Delete note" },
+    { id: "undo-delete", title: "Undo last note deletion" },
 ] as const satisfies readonly {
-  id: string;
-  title: string;
-  binding?: Keybinding;
+    id: string;
+    title: string;
+    binding?: Keybinding;
 }[];
 export type CommandId = (typeof commandDefinitions)[number]["id"];
 export type UICommand = {
-  id: CommandId;
-  title: string;
-  binding?: Keybinding;
-  enabled: boolean;
+    id: CommandId;
+    title: string;
+    binding?: Keybinding;
+    enabled: boolean;
 };
 export function bindingLabel(binding?: Keybinding): string {
-  return binding
-    ? `${binding.primary === false ? "" : "⌘"}${binding.shift ? "⇧" : ""}${binding.key === "escape" ? "Esc" : binding.key.toUpperCase()}`
-    : "";
+    return binding
+        ? `${binding.primary === false ? "" : "⌘"}${binding.shift ? "⇧" : ""}${binding.key === "escape" ? "Esc" : binding.key.toUpperCase()}`
+        : "";
 }
 export function commandBinding(id: CommandId): string {
-  const command = commandDefinitions.find((command) => command.id === id);
-  return command && "binding" in command ? bindingLabel(command.binding) : "";
+    const command = commandDefinitions.find((command) => command.id === id);
+    return command && "binding" in command ? bindingLabel(command.binding) : "";
 }
 export function matchesBinding(
-  event: KeyboardEvent,
-  binding?: Keybinding,
+    event: KeyboardEvent,
+    binding?: Keybinding,
 ): boolean {
-  if (
-    !binding ||
-    event.isComposing ||
-    (event.metaKey || event.ctrlKey) !== (binding.primary !== false) ||
-    event.altKey
-  )
-    return false;
-  return (
-    event.shiftKey === !!binding.shift &&
-    event.key.toLowerCase() === binding.key
-  );
+    if (
+        !binding ||
+        event.isComposing ||
+        (event.metaKey || event.ctrlKey) !== (binding.primary !== false) ||
+        event.altKey
+    )
+        return false;
+    return (
+        event.shiftKey === !!binding.shift &&
+        event.key.toLowerCase() === binding.key
+    );
 }

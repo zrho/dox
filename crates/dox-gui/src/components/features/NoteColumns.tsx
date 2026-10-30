@@ -81,7 +81,7 @@ export default function NoteColumns(props: {
       classList={{ "select-none": drag.draggingKey() !== undefined }}
       aria-label="Note columns"
     >
-      <div class="relative h-full min-w-full" style={{ width: `${props.columns.length * columnWidth()}px` }}>
+      <div class="relative mx-auto h-full" style={{ width: `${props.columns.length * columnWidth()}px` }}>
         <For each={props.columns}>
           {(column, index) => (
             <NoteColumnPanel
