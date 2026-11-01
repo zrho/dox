@@ -662,6 +662,26 @@ export function createLibrarySession() {
     });
     await refresh();
   }
+  async function openDailyNote() {
+    ++indexRequest;
+    const doc = await invoke<Document>("open_daily_note");
+    const existing = columns().find((column) => column.document.note.id === doc.note.id);
+    if (existing) {
+      revealColumn(existing.key);
+    } else {
+      ++request;
+      addColumn(doc, "", "edit");
+      // Leave the date heading intact and start writing in the body.
+      queueMicrotask(() => {
+        editor()?.setSelectionRange(doc.source.length, doc.source.length);
+      });
+    }
+    setIndex((previous) => ({
+      ...previous,
+      notes: [doc.note, ...previous.notes.filter((note) => note.id !== doc.note.id)],
+    }));
+    await refresh();
+  }
   async function copyReference() {
     const note = current()?.note;
     if (!note) return;
@@ -708,6 +728,7 @@ export function createLibrarySession() {
     "previous-pane": () => focusAdjacentPane(-1),
     "next-pane": () => focusAdjacentPane(1),
     "new-note": () => create(),
+    "daily-note": openDailyNote,
     "new-window": () => {
       void invoke<void>("new_window").catch((error) => setError(String(error)));
     },
@@ -761,6 +782,7 @@ export function createLibrarySession() {
         return true;
       case "find":
       case "new-note":
+      case "daily-note":
       case "new-literature":
       case "import-publication":
         return !!library();

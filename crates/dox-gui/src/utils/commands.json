@@ -46,6 +46,13 @@
       "key": "n"
     }
   },
+  "daily-note": {
+    "title": "Open today's note",
+    "binding": {
+      "key": "d",
+      "shift": true
+    }
+  },
   "new-window": {
     "title": "New window",
     "binding": {

@@ -118,7 +118,7 @@ fn compiler_key() -> String {
     settings.sort();
     digest(
         format!(
-            "{}:{}:{SVG_MATH}:{settings:?}",
+            "note-ids-v2:{}:{}:{SVG_MATH}:{settings:?}",
             compiler::VERSION,
             literature::CACHE_KEY
         )
@@ -127,10 +127,11 @@ fn compiler_key() -> String {
 }
 
 pub fn valid_id(id: &str) -> bool {
-    id.len() == 5
+    (id.len() == 5
         && id
             .bytes()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()))
+        || (id.len() == 10 && valid_date(id))
 }
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -559,8 +560,12 @@ impl Library {
                 }
             }
             if diagnostic.is_some() {
-                for capture in Regex::new(r"@([0-9A-Z]{5})\b")?.captures_iter(&source) {
-                    link_destinations.insert(format!("dox:{}", &capture[1]));
+                for capture in Regex::new(r"@([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9A-Z]{5})\b")?
+                    .captures_iter(&source)
+                {
+                    if valid_id(&capture[1]) {
+                        link_destinations.insert(format!("dox:{}", &capture[1]));
+                    }
                 }
             }
         }
@@ -577,7 +582,7 @@ impl Library {
                     id,
                     Some(&explicit.document),
                     format!(
-                        "Invalid note link '{destination}': expected dox: followed by five uppercase letters or digits"
+                        "Invalid note link '{destination}': expected dox: followed by five uppercase letters or digits, or a valid YYYY-MM-DD date"
                     ),
                 ))
             } else {
@@ -827,16 +832,22 @@ impl Library {
     }
     pub fn create(&self, title: &str, tags: Vec<String>) -> Result<NoteDocument> {
         ensure!(!title.trim().is_empty(), "Title must not be empty");
-        self.create_inner(Some(title.trim()), tags, "typst", None)
+        self.create_inner(Some(title.trim()), tags, "typst", None, None)
     }
 
     /// Create an editable draft whose title comes from its heading.
     pub fn create_untitled(&self) -> Result<NoteDocument> {
-        self.create_inner(None, vec![], "typst", None)
+        self.create_inner(None, vec![], "typst", None, None)
+    }
+
+    /// Daily notes are ordinary Typst notes whose IDs are their local dates.
+    pub fn open_daily_note(&self) -> Result<NoteDocument> {
+        let today = jiff::Zoned::now().date().to_string();
+        self.create_inner(None, vec![], "typst", None, Some(&today))
     }
 
     pub fn create_literature(&self) -> Result<NoteDocument> {
-        self.create_inner(None, vec![], "literature", None)
+        self.create_inner(None, vec![], "literature", None, None)
     }
 
     /// Metadata failures create no item. PDF failures preserve the imported
@@ -845,7 +856,7 @@ impl Library {
         let bibtex = publication::lookup(input)?;
         let entry = literature::parse(&bibtex, "IMPORT")?;
         let pdf = publication_pdf::PdfSource::from_entry(&entry);
-        let mut document = self.create_inner(None, vec![], "literature", Some(&bibtex))?;
+        let mut document = self.create_inner(None, vec![], "literature", Some(&bibtex), None)?;
         let mut warnings = vec![];
         if let Some(pdf) = pdf {
             match self.attach_paper_pdf(&document.note.id, &pdf) {
@@ -862,19 +873,28 @@ impl Library {
         tags: Vec<String>,
         kind: &str,
         initial_bibtex: Option<&str>,
+        daily_id: Option<&str>,
     ) -> Result<NoteDocument> {
+        if let Some(id) = daily_id {
+            ensure!(id.len() == 10 && valid_id(id), "Invalid daily note ID: {id}");
+        }
+        let heading = title.or(daily_id).unwrap_or("Untitled");
         const ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let mut rng = rand::rng();
         for _ in 0..100 {
-            let id: String = (0..5)
-                .map(|_| ALPHABET[rng.random_range(0..36)] as char)
-                .collect();
+            let id = daily_id.map(str::to_owned).unwrap_or_else(|| {
+                (0..5)
+                    .map(|_| ALPHABET[rng.random_range(0..36)] as char)
+                    .collect::<String>()
+            });
             let dir = self.root.join(&id);
             match fs::create_dir(&dir) {
                 Ok(()) => {
                     let result = (|| -> Result<NoteDocument> {
                         let mut fields = Map::new();
-                        let today = jiff::Zoned::now().date().to_string();
+                        let today = daily_id
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| jiff::Zoned::now().date().to_string());
                         if let Some(title) = title {
                             fields.insert("title".into(), json!(title));
                             fields.insert("tags".into(), json!(tags));
@@ -900,8 +920,7 @@ impl Library {
                                 "@article{{{id},\n  title = {{Untitled}},\n  author = {{Author}},\n}}\n"
                             )
                         } else {
-                            let title = title.unwrap_or("Untitled");
-                            format!("#metadata(\"{today}\") <dox-date>\n\n= {title}\n\n")
+                            format!("#metadata(\"{today}\") <dox-date>\n\n= {heading}\n\n")
                         };
                         atomic_write(&dir.join(&metadata.document), source.as_bytes())?;
                         if initial_bibtex.is_some() {
@@ -921,9 +940,9 @@ impl Library {
                             note: Note {
                                 id: id.clone(),
                                 metadata: merged_metadata,
-                                title: title.unwrap_or("Untitled").to_owned(),
+                                title: heading.to_owned(),
                                 title_html: None,
-                                title_text: title.unwrap_or("Untitled").to_owned(),
+                                title_text: heading.to_owned(),
                                 tags: tags.clone(),
                                 links: vec![],
                                 revision,
@@ -937,6 +956,11 @@ impl Library {
                         let _ = fs::remove_dir_all(&dir);
                     }
                     return result;
+                }
+                // A date identifies one note, independent of its current title.
+                // Read an existing item without overwriting any of its files.
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && daily_id.is_some() => {
+                    return self.read(&id);
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(e) => return Err(e.into()),
@@ -1039,9 +1063,10 @@ impl Library {
                     .all(|c| matches!(c, Component::Normal(_))),
             "Invalid trash entry"
         );
+        // Remove the timestamp and random suffix from the right: date IDs contain hyphens.
         let id = trash_entry
-            .split('-')
-            .next()
+            .rsplitn(3, '-')
+            .nth(2)
             .context("Invalid trash entry")?;
         ensure!(valid_id(id), "Invalid note ID in trash entry");
         let trash = self.root.join(".trash");

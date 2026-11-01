@@ -108,6 +108,13 @@ async fn create_note(
     with_library(window, state, |library| library.create_untitled()).await
 }
 #[tauri::command]
+async fn open_daily_note(
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<NoteDocument, String> {
+    with_library(window, state, |library| library.open_daily_note()).await
+}
+#[tauri::command]
 async fn create_literature(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
@@ -256,6 +263,7 @@ fn main() {
             cached_notes,
             read_note,
             create_note,
+            open_daily_note,
             create_literature,
             import_publication,
             find_paper_pdf,

@@ -1,34 +1,97 @@
 use anyhow::{Context, Result, ensure};
-use biblatex::{Bibliography, ChunksExt, DateValue, Entry, PermissiveType, RawBibliography};
-use std::ops::Range;
+use biblatex::{
+    Bibliography, ChunksExt, DateValue, Entry, PermissiveType, RawBibliography, RawChunk,
+};
+use std::{collections::HashSet, ops::Range};
 
-pub(crate) const CACHE_KEY: &str = "biblatex-0.12-v1";
+pub(crate) const CACHE_KEY: &str = "biblatex-0.12-v2-bare-months";
 
-fn single_entry(source: &str) -> Result<(Entry, Range<usize>)> {
-    let raw = RawBibliography::parse(source)
+struct ParsedEntry {
+    entry: Entry,
+    key_span: Range<usize>,
+    bare_months: Vec<Range<usize>>,
+}
+
+fn single_entry(source: &str) -> Result<ParsedEntry> {
+    let mut raw = RawBibliography::parse(source)
         .map_err(|error| anyhow::anyhow!("Invalid BibTeX: {error}"))?;
     ensure!(
         raw.entries.len() == 1,
         "Literature files must contain exactly one entry"
     );
     let key_span = raw.entries[0].v.key.span.clone();
+    let definitions = raw
+        .abbreviations
+        .iter()
+        .map(|pair| pair.key.v)
+        .collect::<HashSet<_>>();
+    let mut bare_months = vec![];
+    // Providers sometimes emit full month names as undefined macros. Handle
+    // only recognized names in month fields, respecting explicit definitions.
+    // May already works as a standard three-letter month macro.
+    for field in &mut raw.entries[0].v.fields {
+        if !field.key.v.eq_ignore_ascii_case("month") {
+            continue;
+        }
+        for chunk in &mut field.value.v {
+            if let RawChunk::Abbreviation(value) = chunk.v
+                && !definitions.contains(value)
+                && [
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
+                ]
+                .iter()
+                .any(|month| value.eq_ignore_ascii_case(month))
+            {
+                chunk.v = RawChunk::Normal(value);
+                bare_months.push(chunk.span.clone());
+            }
+        }
+    }
     let entry = Bibliography::from_raw(raw)
         .map_err(|error| anyhow::anyhow!("Invalid BibTeX: {error}"))?
         .into_vec()
         .pop()
         .context("Expected one bibliographic entry")?;
-    Ok((entry, key_span))
+    Ok(ParsedEntry {
+        entry,
+        key_span,
+        bare_months,
+    })
 }
 
-/// Use the parser's key span to preserve comments, macros and formatting.
+/// Use parser spans to replace the key and brace nonstandard bare month names,
+/// preserving the remainder of the provider's source.
 pub(crate) fn with_key(source: &str, id: &str) -> Result<String> {
-    let (entry, span) = single_entry(source)?;
+    let ParsedEntry {
+        entry,
+        key_span,
+        bare_months,
+    } = single_entry(source)?;
     ensure!(
         field(&entry, "title").is_some_and(|title| !title.trim().is_empty()),
         "The metadata service returned a reference without a title"
     );
+    let mut edits = bare_months
+        .into_iter()
+        .map(|span| (span.clone(), format!("{{{}}}", &source[span])))
+        .collect::<Vec<_>>();
+    edits.push((key_span, id.to_owned()));
+    // Applying edits from the end keeps all parser offsets valid.
+    edits.sort_unstable_by(|(a, _), (b, _)| b.start.cmp(&a.start));
     let mut source = source.to_owned();
-    source.replace_range(span, id);
+    for (span, value) in edits {
+        source.replace_range(span, &value);
+    }
     if !source.ends_with('\n') {
         source.push('\n');
     }
@@ -36,7 +99,7 @@ pub(crate) fn with_key(source: &str, id: &str) -> Result<String> {
 }
 
 pub(crate) fn parse(source: &str, id: &str) -> Result<Entry> {
-    let (entry, _) = single_entry(source)?;
+    let entry = single_entry(source)?.entry;
     ensure!(entry.key == id, "BibTeX citation key must be {id}");
     Ok(entry)
 }

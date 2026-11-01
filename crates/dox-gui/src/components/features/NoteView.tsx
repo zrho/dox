@@ -164,7 +164,7 @@ export default function NoteView(props: NoteViewProps) {
                 target.getAttribute("xlink:href") ??
                 "";
             event.preventDefault();
-            if (/^dox:[0-9A-Z]{5}$/.test(href)) props.onNavigate(href.slice(4));
+            if (/^dox:(?:[0-9A-Z]{5}|[0-9]{4}-[0-9]{2}-[0-9]{2})$/.test(href)) props.onNavigate(href.slice(4));
             else if (href.startsWith("#")) {
                 try {
                     root.getElementById(
@@ -178,7 +178,7 @@ export default function NoteView(props: NoteViewProps) {
         const internalLink = (target: EventTarget | null) => {
             const link = target instanceof Element ? target.closest("a") : null;
             return link instanceof HTMLAnchorElement &&
-                /^dox:[0-9A-Z]{5}$/.test(link.getAttribute("href") ?? "")
+                /^dox:(?:[0-9A-Z]{5}|[0-9]{4}-[0-9]{2}-[0-9]{2})$/.test(link.getAttribute("href") ?? "")
                 ? link
                 : undefined;
         };

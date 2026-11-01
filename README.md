@@ -63,6 +63,9 @@ Notes/
     note.typ
     attachments/           # optional files copied into the item
       paper.pdf
+  2026-10-30/              # daily note, with its date as its ID
+    meta.json
+    note.typ
   .cache/                 # disposable HTML and metadata indexes
 ```
 
@@ -98,6 +101,8 @@ Explicit `meta.json` fields override derived fields, including empty values, exc
 
 GUI-created notes have minimal metadata and derive their titles from their headings. CLI-created notes have explicit titles and tags; remove those fields from `meta.json` if you want content to own them. Edit metadata externally for now.
 
+Choose **Open today's note** in the command panel or press ⌘⇧D to open or create a normal note whose ID and initial title are today's local date in `YYYY-MM-DD` format, such as `2026-10-30`. The note lives in `2026-10-30/note.typ` with ordinary Typst metadata, and links use `dox:2026-10-30`. The command reuses the note with that date ID even if its heading changes. An already open pane is focused with its draft intact; otherwise the note opens for editing with the cursor at the end of its source. Other open drafts remain intact. Existing notes with random IDs keep those IDs; matching a date title alone does not make them the daily note.
+
 Links use `dox:ID`. The compiler resolves links, including computed destinations, for the index. A broken draft remains editable and can retain literal links as a best-effort fallback. Missing targets are retained and reported as dangling-link errors on save/read; malformed `dox:` destinations are reported as invalid-note-link errors. Links emitted through HTML show rules are also checked from compiled HTML. Other web links are currently inert in the note viewer. Literature items use the same generated IDs as citation keys; see below.
 
 Clicking a note link, citation, or backlink focuses and reveals its existing pane, or appends a new pane at the end if the item is not open. All other panes and unsaved drafts remain open.
@@ -125,7 +130,7 @@ Each item has `meta.json` containing `{"type":"literature","document":"reference
 }
 ```
 
-View mode shows a compact field table with right-aligned labels, including publication type, authors, publication details, identifiers, and any additional BibTeX fields. When present, the abstract appears as reading text below the table. The title appears in the column header, without a repeated heading or Title row in the body. Edit mode retains the BibTeX source. The title is derived from the BibTeX `title` field unless explicitly overridden in metadata. The Rust `biblatex` crate parses each file, resolves string macros and concatenated values, decodes supported LaTeX escapes, and interprets author/editor names and legacy date fields. Comments and local `@string` definitions are supported, while each file must still contain exactly one bibliographic entry whose key matches its item ID. Imports replace the key using the parser's source span, preserving the rest of the provider's source. The generated citation bibliography serializes each parsed entry independently so local string definitions cannot conflict across items.
+View mode shows a compact field table with right-aligned labels, including publication type, authors, publication details, identifiers, and any additional BibTeX fields. When present, the abstract appears as reading text below the table. The title appears in the column header, without a repeated heading or Title row in the body. Edit mode retains the BibTeX source. The title is derived from the BibTeX `title` field unless explicitly overridden in metadata. The Rust `biblatex` crate parses each file, resolves string macros and concatenated values, decodes supported LaTeX escapes, and interprets author/editor names and legacy date fields. Comments and local `@string` definitions are supported, while each file must still contain exactly one bibliographic entry whose key matches its item ID. Imports replace the key and brace undefined full month names (for example, `month = June` becomes `month = {June}`) using the parser's source spans, preserving the remaining provider source. The same month compatibility applies when reading existing items; explicit `@string` definitions are respected, and other undefined abbreviations remain errors. The generated citation bibliography serializes each parsed entry independently so local string definitions cannot conflict across items.
 
 In a Typst note, write `@ABC12` (including optional Typst citation supplements), or `#cite(<ABC12>)`. Command-K inserts `@ABC12` when selecting a literature item, replacing the editor selection. Command-Shift-K inserts the publication title followed by `@ABC12`; special Typst characters in the title are escaped. Both shortcuts insert ordinary links when choosing notes. The command panel offers **Copy note link or citation**. dox generates a bibliography and compilation wrapper under `.cache` without modifying the note source. The generated bibliography is hidden in the rendered note; citations navigate to literature items and contribute backlinks. Hovering a citation or note link shows the target title in an app tooltip. Invalid BibTeX is reported in diagnostics and cannot be saved through the app; externally broken source remains editable.
 
