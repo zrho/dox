@@ -91,7 +91,7 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
   createEffect(() => {
     if (props.open) {
       setQuery("");
-      setSelected(0);
+      selectAndReveal(0);
     }
   });
   createEffect(() => {
@@ -117,7 +117,7 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
             score: match.score,
           })),
         );
-        setSelected(0);
+        selectAndReveal(0);
         setLoading(false);
       })
       .catch((error) => {
@@ -127,15 +127,16 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
         setLoading(false);
       });
   });
-  createEffect(() => {
-    const active = selected();
-    if (props.open)
-      queueMicrotask(() =>
+  // Only keyboard navigation and resets reveal rows; hover must not fight scrolling.
+  function selectAndReveal(index: number) {
+    setSelected(index);
+    queueMicrotask(() => {
+      if (props.open && selected() === index)
         list
-          ?.querySelector(`[data-index="${active}"]`)
-          ?.scrollIntoView({ block: "nearest" }),
-      );
-  });
+          ?.querySelector(`[data-index="${index}"]`)
+          ?.scrollIntoView({ block: "nearest" });
+    });
+  }
   const disabled = (item: T) => !!props.busy || !!props.disabled?.(item);
   function choose(index: number) {
     const result = results()[index];
@@ -150,9 +151,8 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
       event.preventDefault();
       const count = results().length;
       if (count)
-        setSelected(
-          (value) =>
-            (value + (event.key === "ArrowDown" ? 1 : -1) + count) % count,
+        selectAndReveal(
+          (selected() + (event.key === "ArrowDown" ? 1 : -1) + count) % count,
         );
     } else if (event.key === "Enter") {
       event.preventDefault();
@@ -212,7 +212,9 @@ export default function FuzzyPicker<T>(props: FuzzyPickerProps<T>) {
         }}
         id={listId}
         class={cn(
-          "max-h-[min(360px,60vh)] overflow-y-auto overscroll-contain p-1",
+          // Clipped labels must chain wheel scrolling to the list, overriding
+          // the global overscroll rule that would trap it inside each label.
+          "max-h-[min(360px,60vh)] overflow-y-auto overscroll-contain p-1 [&_*]:overscroll-y-auto",
           props.listClass,
         )}
         role="listbox"
