@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Fira Code";
+  src: url("/fonts/fira-code/FiraCode.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+}
+
 @theme {
   --spacing: 4px;
   --text-xs: 12px;
@@ -34,7 +42,7 @@
   --color-document-border-strong: #acb0be;
   --color-document-selection: #c9dcfc;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-editor: var(--font-sans);
+  --font-editor: "Fira Code", ui-monospace, monospace;
   --font-mono: var(--font-sans);
 }
 

@@ -15,7 +15,6 @@
                 "title": "Dox",
                 "titleBarStyle": "Overlay",
                 "hiddenTitle": true,
-                "trafficLightPosition": { "x": 12, "y": 22 },
                 "backgroundColor": "#ebeef0",
                 "theme": "Light",
                 "width": 1200,

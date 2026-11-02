@@ -30,16 +30,7 @@ export default function LibraryPage() {
           onOpen={app.openNote}
         />
       }
-      header={
-        <NoteToolbar
-          titlebar={nativeTitlebar}
-          note={app.current()?.note}
-          mode={app.mode()}
-          dirty={app.dirty()}
-          busy={app.busy()}
-          onCommand={app.executeCommand}
-        />
-      }
+      header={<NoteToolbar titlebar={nativeTitlebar} />}
       overlays={
         <>
           {" "}
