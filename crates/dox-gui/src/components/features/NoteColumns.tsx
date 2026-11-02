@@ -10,6 +10,7 @@ import {
 import Paperclip from "lucide-solid/icons/paperclip";
 import { titleText } from "./NoteTitle";
 import NoteWorkspace from "./NoteWorkspace";
+import type { NoteEditorHandle } from "./NoteEditor";
 import BacklinksPanel from "./BacklinksPanel";
 import AttachmentsPanel from "./AttachmentsPanel";
 import { createColumnDrag } from "../../hooks/createColumnDrag";
@@ -35,7 +36,7 @@ export default function NoteColumns(props: {
   onNavigate: (id: string, fromKey: number) => void;
   onSourceChange: (key: number, source: string) => void;
   getNoteTitle: (id: string) => string | undefined;
-  bindEditor: (key: number, element: HTMLTextAreaElement) => void;
+  bindEditor: (key: number, element: NoteEditorHandle) => void;
   unbindEditor: (key: number) => void;
 }) {
   let viewport!: HTMLDivElement;
@@ -165,7 +166,7 @@ function NoteColumnPanel(props: {
   onNavigate: (id: string) => void;
   onSourceChange: (source: string) => void;
   getNoteTitle: (id: string) => string | undefined;
-  editorRef: (element: HTMLTextAreaElement) => void;
+  editorRef: (element: NoteEditorHandle) => void;
   onDispose: () => void;
 }) {
   onCleanup(props.onDispose);

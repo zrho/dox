@@ -8,6 +8,7 @@ import {
   type UICommand,
 } from "../utils/commands";
 import { titleText } from "../components/features/NoteTitle";
+import type { NoteEditorHandle } from "../components/features/NoteEditor";
 import type {
   Note,
   Document,
@@ -54,7 +55,7 @@ export function createLibrarySession() {
   const editorZoom = () => activeColumn()?.editorZoom ?? defaultZoom.editorZoom;
   const viewZoom = () => activeColumn()?.viewZoom ?? defaultZoom.viewZoom;
   const external = () => activeColumn()?.external ?? false;
-  const editors = new Map<number, HTMLTextAreaElement>();
+  const editors = new Map<number, NoteEditorHandle>();
   const editor = () =>
     activeKey() === undefined ? undefined : editors.get(activeKey()!);
   function updateColumn(key: number, patch: Partial<NoteColumn>) {
@@ -523,13 +524,7 @@ export function createLibrarySession() {
         );
       }
       editor()!.focus();
-      editor()!.setSelectionRange(position, position);
-      const lineHeight =
-        parseFloat(getComputedStyle(editor()!).lineHeight) || 20;
-      editor()!.scrollTop = Math.max(
-        0,
-        (source().slice(0, position).split("\n").length - 3) * lineHeight,
-      );
+      editor()!.revealPosition(position);
     });
   }
   async function view() {
@@ -537,8 +532,8 @@ export function createLibrarySession() {
     if (mode() === "edit" && editor() && current()) {
       editPosition = {
         noteId: current()!.note.id,
-        start: editor()!.selectionStart,
-        end: editor()!.selectionEnd,
+        start: editor()!.selection.start,
+        end: editor()!.selection.end,
         scrollTop: editor()!.scrollTop,
       };
     }
@@ -558,7 +553,7 @@ export function createLibrarySession() {
         editPosition &&
         editPosition.noteId === current()?.note.id
       ) {
-        editor()!.setSelectionRange(editPosition.start, editPosition.end);
+        editor()!.setSelection(editPosition.start, editPosition.end);
         editor()!.scrollTop = editPosition.scrollTop;
       }
     });
@@ -581,14 +576,14 @@ export function createLibrarySession() {
       !current() ||
       mode() !== "edit" ||
       !editor() ||
-      document.activeElement !== editor()
+      !editor()?.hasFocus
     )
       return;
     pendingLink = {
       noteId: current()!.note.id,
       source: source(),
-      start: editor()!.selectionStart,
-      end: editor()!.selectionEnd,
+      start: editor()!.selection.start,
+      end: editor()!.selection.end,
     };
     setPickerMode(withTitle ? "insert-with-title" : "insert");
     setPickerOpen(true);
@@ -630,7 +625,7 @@ export function createLibrarySession() {
       link +
       selection.source.slice(selection.end);
     const cursor = selection.start + link.length;
-    setSource(updated);
+    editor()!.replaceRange(selection.start, selection.end, link);
     pendingLink = {
       ...selection,
       source: updated,
@@ -651,7 +646,7 @@ export function createLibrarySession() {
         source() === selection.source
       ) {
         editor()!.focus({ preventScroll: true });
-        editor()!.setSelectionRange(selection.start, selection.end);
+        editor()!.setSelection(selection.start, selection.end);
       }
       pendingLink = undefined;
     });
@@ -672,7 +667,7 @@ export function createLibrarySession() {
     queueMicrotask(() => {
       editor()?.focus();
       const start = doc.source.indexOf("Untitled");
-      editor()?.setSelectionRange(start, start + 8);
+      editor()?.setSelection(start, start + 8);
     });
     await refresh();
   }
@@ -687,7 +682,7 @@ export function createLibrarySession() {
       addColumn(doc, "", "edit");
       // Leave the date heading intact and start writing in the body.
       queueMicrotask(() => {
-        editor()?.setSelectionRange(doc.source.length, doc.source.length);
+        editor()?.setSelection(doc.source.length, doc.source.length);
       });
     }
     setIndex((previous) => ({
@@ -919,7 +914,7 @@ export function createLibrarySession() {
     dirty: anyDirty,
     busy,
     modalOpen: () => pickerOpen() || commandPanelOpen() || publicationImportOpen(),
-    editorFocused: () => document.activeElement === editor(),
+    editorFocused: () => editor()?.hasFocus ?? false,
     dismissMessage,
     onChange: () => run(syncFromDisk),
     onCommand: executeCommand,
@@ -1002,7 +997,7 @@ export function createLibrarySession() {
     bindMain: (element: HTMLElement) => {
       main = element;
     },
-    bindEditor: (key: number, element: HTMLTextAreaElement) => {
+    bindEditor: (key: number, element: NoteEditorHandle) => {
       editors.set(key, element);
     },
     unbindEditor: (key: number) => {

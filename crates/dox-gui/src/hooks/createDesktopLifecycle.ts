@@ -53,7 +53,13 @@ export function createDesktopLifecycle(options: {
       .catch(options.onError);
     const escapeBinding = commandDefinitions.find((command) => command.id === "escape")?.binding;
     const onKeyCapture = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || options.modalOpen() || !matchesBinding(event, escapeBinding)) return;
+      if (event.defaultPrevented || options.modalOpen()) return;
+      if (!matchesBinding(event, escapeBinding)) {
+        // App shortcuts take priority over editor bindings (including macOS
+        // Control-key editing commands). Escape still bubbles to nested controls.
+        if (options.editorFocused()) onKey(event);
+        return;
+      }
       // Messages have priority even when focus is inside a disclosure or editor.
       // Held Escape must not dismiss one thing and then close another.
       if (event.repeat || options.dismissMessage()) {
