@@ -1,6 +1,5 @@
 import { Show } from "solid-js";
 import { isTauri } from "@tauri-apps/api/core";
-import LibraryTree from "../components/features/LibraryTree";
 import NoteToolbar from "../components/features/NoteToolbar";
 import NoteColumns from "../components/features/NoteColumns";
 import DiagnosticsPanel from "../components/features/DiagnosticsPanel";
@@ -11,6 +10,15 @@ import Alert from "../components/ui/Alert";
 import { createLibrarySession } from "../hooks/createLibrarySession";
 import AppShell from "../components/layout/AppShell";
 
+/** Split a library path so the folder name stays visible while the prefix truncates. */
+function splitLibraryPath(path: string) {
+  const trimmed = path.replace(/\/+$/, "");
+  const index = trimmed.lastIndexOf("/");
+  return index > 0
+    ? { parent: trimmed.slice(0, index + 1), name: trimmed.slice(index + 1) }
+    : { parent: "", name: trimmed };
+}
+
 /** The library page composes feature views around one library session. */
 export default function LibraryPage() {
   const app = createLibrarySession();
@@ -18,17 +26,19 @@ export default function LibraryPage() {
   return (
     <AppShell
       titlebar={nativeTitlebar}
-      sidebarVisible={app.sidebarVisible()}
-      sidebarRef={app.bindSidebar}
       mainRef={app.bindMain}
-      sidebar={
-        <LibraryTree
-          path={app.library()}
-          notes={app.pinnedNotes()}
-          activeId={app.current()?.note.id}
-          busy={app.busy()}
-          onOpen={app.openNote}
-        />
+      status={
+        <Show when={app.library()}>
+          {(path) => {
+            const parts = splitLibraryPath(path());
+            return (
+              <span class="flex min-w-0 items-baseline" title={path()}>
+                <span class="min-w-0 truncate text-subtle">{parts.parent}</span>
+                <span class="shrink-0">{parts.name}</span>
+              </span>
+            );
+          }}
+        </Show>
       }
       header={<NoteToolbar titlebar={nativeTitlebar} />}
       overlays={

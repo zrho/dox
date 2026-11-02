@@ -158,19 +158,6 @@ async fn save_note(
     .await
 }
 #[tauri::command]
-async fn set_note_pinned(
-    id: String,
-    pinned: bool,
-    revision: String,
-    window: tauri::WebviewWindow,
-    state: State<'_, Sessions>,
-) -> Result<NoteDocument, String> {
-    with_library(window, state, move |library| {
-        library.set_pinned(&id, pinned, &revision)
-    })
-    .await
-}
-#[tauri::command]
 async fn delete_note(
     id: String,
     revision: String,
@@ -276,7 +263,6 @@ fn main() {
             import_publication,
             find_paper_pdf,
             save_note,
-            set_note_pinned,
             render_note,
             list_attachments,
             attach_files,

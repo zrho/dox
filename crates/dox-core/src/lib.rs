@@ -981,27 +981,6 @@ impl Library {
         atomic_write(&path, source.as_bytes())?;
         self.read(id)
     }
-    /// Update pin metadata for any item without rewriting its source.
-    pub fn set_pinned(
-        &self,
-        id: &str,
-        pinned: bool,
-        expected_revision: &str,
-    ) -> Result<NoteDocument> {
-        let current = self.read(id)?;
-        ensure!(
-            current.note.revision == expected_revision,
-            "Conflict: this item changed on disk. Reload it before changing its pin."
-        );
-        let (_, mut metadata) = self.paths(id)?;
-        metadata.fields.insert("pinned".into(), json!(pinned));
-        atomic_write(
-            &self.note_dir(id)?.join("meta.json"),
-            &serde_json::to_vec_pretty(&metadata)?,
-        )?;
-        self.read(id)
-    }
-
     /// Set a Typst note's source date, retaining revision conflict protection.
     pub fn set_date(&self, id: &str, date: &str, expected_revision: &str) -> Result<NoteDocument> {
         ensure!(

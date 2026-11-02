@@ -30,7 +30,6 @@ export type Note = {
     type: string;
     document: string;
     date?: string;
-    pinned?: boolean;
   };
 };
 export type Document = {

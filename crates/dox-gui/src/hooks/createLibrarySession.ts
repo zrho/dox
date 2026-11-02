@@ -24,8 +24,7 @@ import { createDesktopLifecycle } from "./createDesktopLifecycle";
 const defaultZoom = { editorZoom: 100, viewZoom: 90 };
 export function createLibrarySession() {
   const [library, setLibrary] = createSignal("");
-  const [sidebarVisible, setSidebarVisible] = createSignal(false);
-  // Reconcile by ID so refreshed JSON updates fields without replacing tree rows.
+  // Reconcile by ID so refreshed JSON updates fields without replacing rows.
   const [libraryIndex, updateIndex] = createStore<Index>({
     notes: [],
     warnings: [],
@@ -174,10 +173,6 @@ export function createLibrarySession() {
   const [pickerMode, setPickerMode] = createSignal<NotePickerMode>("open");
   const [publicationImportOpen, setPublicationImportOpen] = createSignal(false);
   const dirty = createMemo(() => !!current() && source() !== current()!.source);
-  const pinnedNotes = createMemo(() =>
-    index().notes.filter((note) => note.metadata.pinned === true),
-  );
-  let sidebar: HTMLElement | undefined;
   let main: HTMLElement | undefined;
   let pendingLink:
     | {
@@ -209,21 +204,7 @@ export function createLibrarySession() {
       setBusy(false);
     }
   }
-  function toggleSidebar() {
-    const hiding = sidebarVisible();
-    const moveFocus = hiding && sidebar?.contains(document.activeElement);
-    setSidebarVisible(!hiding);
-    if (moveFocus)
-      queueMicrotask(() => {
-        if (mode() === "edit" && editor()?.isConnected) editor()!.focus();
-        else main?.focus();
-      });
-  }
   function closeFocused() {
-    if (sidebarVisible() && sidebar?.contains(document.activeElement)) {
-      toggleSidebar();
-      return;
-    }
     const key = activeKey();
     if (key !== undefined) closeColumn(key);
   }
@@ -240,9 +221,7 @@ export function createLibrarySession() {
   }
   function escapeFocused() {
     if (dismissMessage() || busy()) return;
-    if (sidebarVisible() && sidebar?.contains(document.activeElement)) {
-      toggleSidebar();
-    } else if (current() && mode() === "edit") {
+    if (current() && mode() === "edit") {
       void run(view);
     } else {
       closeFocused();
@@ -411,32 +390,6 @@ export function createLibrarySession() {
     await invoke<Attachment>("find_paper_pdf", { id, source: column.source });
     await refreshAttachments(id);
     setWarning("");
-  }
-  async function togglePin() {
-    const active = current();
-    if (!active) return;
-    ++indexRequest;
-    const doc = await invoke<Document>("set_note_pinned", {
-      id: active.note.id,
-      pinned: active.note.metadata.pinned !== true,
-      revision: active.note.revision,
-    });
-    // Only the saved baseline changes. Keep any unsaved editor draft intact.
-    setCurrent(doc);
-    setExternal(false);
-    setIndex((previous) => ({
-      ...previous,
-      notes: previous.notes.map((note) =>
-        note.id === doc.note.id ? doc.note : note,
-      ),
-      diagnostics: [
-        ...previous.diagnostics.filter(
-          (issue) => issue.note_id !== doc.note.id,
-        ),
-        ...doc.note.diagnostics,
-      ],
-    }));
-    await refresh();
   }
   async function deleteCurrent() {
     const document = current();
@@ -766,8 +719,6 @@ export function createLibrarySession() {
       openLinkPicker(true);
     },
     copy: copyReference,
-    "toggle-sidebar": toggleSidebar,
-    "toggle-pin": togglePin,
     "zoom-in": () => {
       zoomContent(10);
     },
@@ -789,7 +740,6 @@ export function createLibrarySession() {
     switch (id) {
       case "commands":
       case "open-library":
-      case "toggle-sidebar":
         return true;
       case "find":
       case "new-note":
@@ -801,7 +751,7 @@ export function createLibrarySession() {
         return !!lastDeleted();
       case "close":
       case "escape":
-        return !!current() || sidebarVisible();
+        return !!current();
       case "previous-pane":
       case "move-pane-previous":
         return columns().findIndex((column) => column.key === activeKey()) > 0;
@@ -828,12 +778,6 @@ export function createLibrarySession() {
   const commands = createMemo<UICommand[]>(() =>
     commandDefinitions.map((command) => ({
       ...command,
-      title:
-        command.id === "toggle-pin"
-          ? current()?.note.metadata.pinned === true
-            ? "Unpin item"
-            : "Pin item"
-          : command.title,
       enabled: commandEnabled(command.id),
     })),
   );
@@ -851,7 +795,6 @@ export function createLibrarySession() {
         "find",
         "insert",
         "insert-with-title",
-        "toggle-sidebar",
         "close",
         "escape",
         "previous-pane",
@@ -923,8 +866,6 @@ export function createLibrarySession() {
   });
   return {
     library,
-    pinnedNotes,
-    sidebarVisible,
     index,
     columns,
     activeKey,
@@ -990,9 +931,6 @@ export function createLibrarySession() {
     getNoteTitle: (id: string) => {
       const note = index().notes.find((note) => note.id === id);
       return note ? titleText(note) : undefined;
-    },
-    bindSidebar: (element: HTMLElement) => {
-      sidebar = element;
     },
     bindMain: (element: HTMLElement) => {
       main = element;

@@ -23,7 +23,7 @@
   - Support deriving metadata from document content, merging it with explicit metadata, and caching the merged result.
   - Titles support Typst syntax, including math. Cache compiled title HTML for display throughout the UI, retaining Typst source for link labels and plain text for search.
   - Store generated files and caches outside version control; a Git-ignored `.cache` directory within the library is acceptable.
-  - Show the cached tree promptly on startup and refresh it in the background without blocking note interaction.
+  - Show the cached index promptly on startup and refresh it in the background without blocking note interaction.
   - Reuse per-note compilation caches based on source/metadata revisions and compiler-reported dependencies; revalidate link diagnostics without recompiling unrelated notes.
   - Watch library files for external changes and update the app accordingly.
   - Deleting a note moves its directory into a Git-ignored `.trash` directory within the library. Support Undo and CLI restoration; check the note revision before deletion.
@@ -48,12 +48,10 @@
     - Citations from Typst notes support navigation and backlinks similarly to ordinary note links. Generate the library bibliography in the disposable cache, but hide its rendered list. Show target titles in component tooltips on citations and note links.
 
 - Editing and UI
-  - Show each library as a sidebar root, with notes directly beneath it in compact 20px, single-line rows with minimal outer padding and file-explorer-style indentation; initially display one root, allowing multiple roots later.
-  - Use Lucide icons, including icons for notes; align the compact tree’s indentation guides with the folder icons.
-  - Use open/closed folder icons for tree disclosure without a chevron; align child guides beneath the folder icon. Preserve tree indentation guides and full-width hover/selection highlights; Command-B toggles the sidebar.
-  - Keep the sidebar free of branding, library counts, and library action buttons; omit a dedicated tags panel for now. Open libraries through the command panel.
-  - Use Command-P to open a compact fuzzy note picker with title/ID matching, arrow-key selection, Enter to focus and reveal an existing pane or append a new one, preserving existing panes and drafts, and Escape to dismiss; omit sidebar search.
-  - Provide a New empty literature item command, showing literature in the same tree and pickers with a book icon.
+  - Use Lucide icons, including a type icon for each item.
+  - Show the open library path in the status bar, truncating the path while keeping the full value in a tooltip. Keep it free of branding, counts, and action buttons; open libraries through the command panel, and omit a dedicated tags panel for now.
+  - Use Command-P to open a compact fuzzy note picker with title/ID matching, arrow-key selection, Enter to focus and reveal an existing pane or append a new one, preserving existing panes and drafts, and Escape to dismiss.
+  - Provide a New empty literature item command, showing literature in pickers with a book icon.
   - Command-Shift-P opens a fuzzy command panel with keyboard navigation and displayed keybindings. Define commands and their keybindings centrally.
   - Create notes immediately without a dialog; focus the editor with a replaceable heading, and derive the title from the content.
   - Keep empty states quiet and omit onboarding copy.
@@ -62,7 +60,7 @@
   - Render a literature item's `url` field as a link that opens in the system browser, and open other web links in rendered notes the same way.
   - Allow dragging panes by the narrow strip beneath their top edge to reorder them with CSS transitions, edge scrolling, and Escape cancellation. Preserve mounted editors, drafts, and scroll state; respect reduced-motion preferences.
   - GUI switches between editing and viewing modes with E or Escape, or one icon button (pencil to edit, eye to view); live preview is not required. Use D outside text fields to delete the focused note after confirmation, with an undo command for the last deletion.
-  - Escape dismisses transient error/warning messages first, then exits editing through the same save/view action as E; retain contextual dialog, disclosure, sidebar, and viewed-pane dismissal. Ignore held Escape repeats. Use j/Left and k/Right to focus and reveal adjacent open panes in visual order without wrapping, leaving text fields and their caret movement alone. Use Shift-J/Shift-Left and Shift-K/Shift-Right to swap the focused pane with its neighbour. Define and display both shortcut alternatives in the central command registry.
+  - Escape dismisses transient error/warning messages first, then exits editing through the same save/view action as E; retain contextual dialog and viewed-pane dismissal. Ignore held Escape repeats. Use j/Left and k/Right to focus and reveal adjacent open panes in visual order without wrapping, leaving text fields and their caret movement alone. Use Shift-J/Shift-Left and Shift-K/Shift-Right to swap the focused pane with its neighbour. Define and display both shortcut alternatives in the central command registry.
   - Command-K while focusing the editor opens a fuzzy note picker and inserts a Typst link at the selection, then returns focus to the editor. Selecting a literature item inserts `@ID` instead. Command-Shift-K uses the same picker and includes the publication title before its citation, escaping Typst characters in bibliographic titles.
   - Use compact toolbar and content padding; show backlinks without a separate outgoing-links panel.
   - Backlinks and diagnostics share a compact, collapsible note-info panel with subtle uppercase headings. Hide the backlinks panel when there are no backlinks.

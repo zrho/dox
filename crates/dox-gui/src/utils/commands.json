@@ -131,12 +131,6 @@
   "copy": {
     "title": "Copy note link or citation"
   },
-  "toggle-sidebar": {
-    "title": "Toggle sidebar",
-    "binding": {
-      "key": "b"
-    }
-  },
   "zoom-in": {
     "title": "Zoom in content",
     "binding": {
@@ -154,9 +148,6 @@
     "binding": {
       "key": "0"
     }
-  },
-  "toggle-pin": {
-    "title": "Toggle pin"
   },
   "delete": {
     "title": "Delete note",
