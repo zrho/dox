@@ -210,10 +210,19 @@ pub(crate) fn render(source: &str, id: &str, title: &str) -> Result<String> {
         } else {
             value.format_verbatim()
         };
+        let cell = if key.as_str() == "url" && is_web_url(&value) {
+            format!(
+                "<a href=\"{}\">{}</a>",
+                escape_html(value.trim()),
+                escape_html(&value)
+            )
+        } else {
+            escape_html(&value)
+        };
         html.push_str(&format!(
             "<tr><th scope=\"row\">{}</th><td>{}</td></tr>",
             escape_html(&label),
-            escape_html(&value)
+            cell
         ));
     }
     html.push_str("</tbody></table>");
@@ -224,6 +233,13 @@ pub(crate) fn render(source: &str, id: &str, title: &str) -> Result<String> {
         ));
     }
     Ok(html)
+}
+
+/// A bibliographic URL becomes a link only when it is an unambiguous web address.
+fn is_web_url(value: &str) -> bool {
+    let url = value.trim();
+    (url.starts_with("http://") || url.starts_with("https://"))
+        && !url.chars().any(char::is_whitespace)
 }
 
 /// Preserve publication-date precision; never invent a missing month or day.

@@ -221,6 +221,14 @@ async fn attach_files(
     .await
 }
 #[tauri::command]
+async fn open_external(url: String) -> Result<(), String> {
+    let url = url.trim();
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Only web links can be opened".into());
+    }
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(error)
+}
+#[tauri::command]
 async fn open_attachment(
     id: String,
     name: String,
@@ -272,6 +280,7 @@ fn main() {
             render_note,
             list_attachments,
             attach_files,
+            open_external,
             open_attachment,
             remove_attachment,
             delete_note,

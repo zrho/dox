@@ -61,8 +61,8 @@ export default function NoteToolbar(props: {
             size="icon"
             busy={props.busy}
             aria-label={props.mode === "view" ? "Edit source" : "View note"}
-            tooltip={`${props.mode === "view" ? "Edit source" : "View note"} (${commandBinding("toggle-mode")})`}
-            onClick={() => props.onCommand("toggle-mode")}
+            tooltip={props.mode === "view" ? `Edit source (${commandBinding("edit")})` : `View note (${commandBinding("escape")})`}
+            onClick={() => props.onCommand(props.mode === "view" ? "edit" : "view")}
           >
             <Show
               when={props.mode === "view"}
@@ -84,6 +84,7 @@ export default function NoteToolbar(props: {
           <Button
             size="icon"
             aria-label="Delete note"
+            tooltip={`Delete note (${commandBinding("delete")})`}
             variant="danger"
             busy={props.busy}
             onClick={() => props.onCommand("delete")}

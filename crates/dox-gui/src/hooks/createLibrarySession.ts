@@ -252,6 +252,12 @@ export function createLibrarySession() {
     const next = position >= 0 ? columns()[position + direction] : undefined;
     if (next) revealColumn(next.key);
   }
+  function moveFocusedPane(direction: -1 | 1) {
+    const position = columns().findIndex((column) => column.key === activeKey());
+    if (position < 0) return;
+    moveColumn(columns()[position].key, position + direction);
+    queueMicrotask(focusActive);
+  }
   async function refresh() {
     const token = ++indexRequest;
     const root = library();
@@ -432,7 +438,15 @@ export function createLibrarySession() {
     await refresh();
   }
   async function deleteCurrent() {
-    if (!current()) return;
+    const document = current();
+    if (!document) return;
+    if (!(await confirm(`Delete “${titleText(document.note)}”?`, {
+      title: "Delete note",
+      kind: "warning",
+      okLabel: "Delete",
+      cancelLabel: "Cancel",
+    }))) return;
+    if (current() !== document) return;
     if (dirty()) await save();
     const id = current()!.note.id;
     ++indexRequest;
@@ -727,6 +741,8 @@ export function createLibrarySession() {
     escape: escapeFocused,
     "previous-pane": () => focusAdjacentPane(-1),
     "next-pane": () => focusAdjacentPane(1),
+    "move-pane-previous": () => moveFocusedPane(-1),
+    "move-pane-next": () => moveFocusedPane(1),
     "new-note": () => create(),
     "daily-note": openDailyNote,
     "new-window": () => {
@@ -792,8 +808,10 @@ export function createLibrarySession() {
       case "escape":
         return !!current() || sidebarVisible();
       case "previous-pane":
+      case "move-pane-previous":
         return columns().findIndex((column) => column.key === activeKey()) > 0;
-      case "next-pane": {
+      case "next-pane":
+      case "move-pane-next": {
         const position = columns().findIndex((column) => column.key === activeKey());
         return position >= 0 && position < columns().length - 1;
       }
@@ -843,6 +861,8 @@ export function createLibrarySession() {
         "escape",
         "previous-pane",
         "next-pane",
+        "move-pane-previous",
+        "move-pane-next",
         "edit",
         "zoom-in",
         "zoom-out",

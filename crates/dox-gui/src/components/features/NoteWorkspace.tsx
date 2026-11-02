@@ -19,6 +19,7 @@ export default function NoteWorkspace(props: {
     <div class="relative min-h-[120px] flex-1 overflow-hidden bg-document-background">
       <div class="h-full min-h-0 hidden:hidden" hidden={props.mode !== "view"}>
         <NoteView
+          note={props.note}
           html={props.html}
           zoom={props.viewZoom}
           active={props.mode === "view" && props.active !== false}

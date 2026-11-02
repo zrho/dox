@@ -7,10 +7,8 @@ import {
   onMount,
   Show,
 } from "solid-js";
-import X from "lucide-solid/icons/x";
 import Paperclip from "lucide-solid/icons/paperclip";
-import Button from "../ui/Button";
-import NoteTitle, { titleText } from "./NoteTitle";
+import { titleText } from "./NoteTitle";
 import NoteWorkspace from "./NoteWorkspace";
 import BacklinksPanel from "./BacklinksPanel";
 import AttachmentsPanel from "./AttachmentsPanel";
@@ -29,7 +27,6 @@ export default function NoteColumns(props: {
   busy: boolean;
   onActivate: (key: number) => void;
   onMove: (key: number, index: number) => void;
-  onClose: (key: number) => void;
   onAttach: (id: string) => void;
   onDropFiles: (id: string, paths: string[]) => void;
   onError: (error: unknown) => void;
@@ -126,7 +123,6 @@ export default function NoteColumns(props: {
               busy={props.busy}
               notes={props.notes}
               onActivate={() => props.onActivate(column.key)}
-              onClose={() => props.onClose(column.key)}
               onAttach={() => props.onAttach(column.document.note.id)}
               onOpenAttachment={(name) => props.onOpenAttachment(column.document.note.id, name)}
               onRemoveAttachment={(name) => props.onRemoveAttachment(column.document.note.id, name)}
@@ -159,7 +155,6 @@ function NoteColumnPanel(props: {
   busy: boolean;
   notes: Note[];
   onActivate: () => void;
-  onClose: () => void;
   onAttach: () => void;
   onOpenAttachment: (name: string) => void;
   onRemoveAttachment: (name: string) => void;
@@ -183,10 +178,8 @@ function NoteColumnPanel(props: {
   return (
     <section
       data-note-column-key={props.column.key}
-      class="absolute top-0 left-0 flex h-full flex-col border-t-2 border-r border-border bg-background motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+      class="absolute top-0 left-0 flex h-full flex-col border-r border-border bg-background motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
       classList={{
-        "border-t-accent": props.active,
-        "border-t-border": !props.active,
         "z-10": props.dragging,
         "shadow-lg": props.dragging,
         "shadow-overlay/25": props.dragging,
@@ -227,40 +220,32 @@ function NoteColumnPanel(props: {
           </div>
         </div>
       </Show>
-      <header
-        class="flex h-7 shrink-0 items-center gap-2 border-b border-border px-2"
-      >
-        <button
-          type="button"
-          class="min-w-0 flex-1 touch-none self-stretch truncate text-left text-xs text-foreground select-none focus-visible:outline-2 focus-visible:outline-ring"
-          classList={{ "cursor-grab": !props.dragging, "cursor-grabbing": props.dragging }}
-          onPointerDown={props.onDragStart}
-          onPointerMove={props.onDragMove}
-          onPointerUp={props.onDragEnd}
-          onPointerCancel={props.onDragCancel}
-          onLostPointerCapture={props.onDragCancel}
-          onClick={props.onActivate}
-          title={titleText(note())}
-        >
-          <NoteTitle note={note()} />
-        </button>
-        <Show when={dirty()}>
-          <span class="text-[10px] text-warning" aria-label="Unsaved">
-            ●
-          </span>
-        </Show>
-        <Button
-          size="icon"
-          aria-label={`Close ${titleText(note())}`}
-          busy={props.busy}
-          onClick={(event) => {
-            event.stopPropagation();
-            props.onClose();
-          }}
-        >
-          <X size={12} strokeWidth={1.5} aria-hidden="true" />
-        </Button>
-      </header>
+      <div class="group shrink-0 select-none">
+        <div
+          aria-hidden="true"
+          class="h-[2px] transition-colors motion-reduce:transition-none"
+          classList={{ "bg-accent": props.active, "bg-border": !props.active }}
+        />
+        <header class="flex h-2 items-stretch">
+          <button
+            type="button"
+            class="min-w-0 flex-1 touch-none self-stretch select-none outline-none"
+            classList={{ "cursor-grab": !props.dragging, "cursor-grabbing": props.dragging }}
+            onPointerDown={props.onDragStart}
+            onPointerMove={props.onDragMove}
+            onPointerUp={props.onDragEnd}
+            onPointerCancel={props.onDragCancel}
+            onLostPointerCapture={props.onDragCancel}
+            onClick={props.onActivate}
+            aria-label={`Drag ${titleText(note())} to reorder`}
+          >
+            <span
+              aria-hidden="true"
+              class="pointer-events-none mx-auto my-[3px] block h-[2px] w-6 rounded-full bg-border-strong opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
+            />
+          </button>
+        </header>
+      </div>
       <div class="flex min-h-0 flex-1 flex-col">
         <NoteWorkspace
           note={note()}
@@ -292,6 +277,9 @@ function NoteColumnPanel(props: {
         aria-label="Item metadata"
         class="flex h-[22px] shrink-0 items-center gap-3 border-t border-border bg-chrome px-2 text-[10px] text-muted tabular-nums"
       >
+        <Show when={dirty()}>
+          <span class="text-warning" aria-label="Unsaved">●</span>
+        </Show>
         <Show when={note().metadata.date}>
           <time dateTime={note().metadata.date}>{note().metadata.date}</time>
         </Show>

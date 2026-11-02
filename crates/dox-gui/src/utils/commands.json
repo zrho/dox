@@ -25,7 +25,7 @@
   "previous-pane": {
     "title": "Focus previous note",
     "binding": {
-      "key": "h",
+      "key": "j",
       "aliases": ["arrowleft"],
       "primary": false,
       "allowInTextFields": false
@@ -34,8 +34,28 @@
   "next-pane": {
     "title": "Focus next note",
     "binding": {
-      "key": "l",
+      "key": "k",
       "aliases": ["arrowright"],
+      "primary": false,
+      "allowInTextFields": false
+    }
+  },
+  "move-pane-previous": {
+    "title": "Move note left",
+    "binding": {
+      "key": "j",
+      "aliases": ["arrowleft"],
+      "shift": true,
+      "primary": false,
+      "allowInTextFields": false
+    }
+  },
+  "move-pane-next": {
+    "title": "Move note right",
+    "binding": {
+      "key": "k",
+      "aliases": ["arrowright"],
+      "shift": true,
       "primary": false,
       "allowInTextFields": false
     }
@@ -82,13 +102,15 @@
     }
   },
   "toggle-mode": {
-    "title": "Toggle edit/view",
-    "binding": {
-      "key": "e"
-    }
+    "title": "Toggle edit/view"
   },
   "edit": {
-    "title": "Edit source"
+    "title": "Edit source",
+    "binding": {
+      "key": "e",
+      "primary": false,
+      "allowInTextFields": false
+    }
   },
   "view": {
     "title": "View note"
@@ -137,7 +159,12 @@
     "title": "Toggle pin"
   },
   "delete": {
-    "title": "Delete note"
+    "title": "Delete note",
+    "binding": {
+      "key": "d",
+      "primary": false,
+      "allowInTextFields": false
+    }
   },
   "undo-delete": {
     "title": "Undo last note deletion"

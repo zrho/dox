@@ -73,7 +73,7 @@ export function createDesktopLifecycle(options: {
       if (!command) return;
       event.preventDefault();
       if (
-        ((command.id === "close" || command.id === "escape") && event.repeat) ||
+        ((command.id === "close" || command.id === "escape" || command.id === "delete") && event.repeat) ||
         ((command.id === "insert" || command.id === "insert-with-title") &&
           !options.editorFocused())
       )

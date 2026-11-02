@@ -101,7 +101,6 @@ export default function LibraryPage() {
         busy={app.busy()}
         onActivate={app.activateColumn}
         onMove={app.moveColumn}
-        onClose={app.closeColumn}
         onAttach={app.attachFiles}
         onDropFiles={app.attachFiles}
         onError={app.reportError}
