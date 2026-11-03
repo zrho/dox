@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
         "build": "tsc --noEmit && vite build",
+        "build:web": "npm --prefix ../../web-reader run build",
         "build:icons": "tauri icon src-tauri/icons/icon.png --output src-tauri/icons/generated",
         "tauri": "tauri"
     },

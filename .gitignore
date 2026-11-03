@@ -6,3 +6,7 @@
 
 **/src-tauri/gen/
 **/src-tauri/icons/generated/
+
+# Prebuilt reader ships inside Rust binaries; keep source builds Node-free.
+!web-reader/dist/
+!web-reader/dist/**

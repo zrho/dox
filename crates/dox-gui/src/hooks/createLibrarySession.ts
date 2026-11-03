@@ -1,7 +1,7 @@
 import { batch, createMemo, createSignal } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
-import { invoke } from "@tauri-apps/api/core";
-import { confirm, open } from "@tauri-apps/plugin-dialog";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { confirm, open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
   commandDefinitions,
   type CommandId,
@@ -168,6 +168,7 @@ export function createLibrarySession() {
   const [warning, setWarning] = createSignal("");
   const [lastDeleted, setLastDeleted] = createSignal<DeletedNote>();
   const [busy, setBusy] = createSignal(false);
+  const [exportStatus, setExportStatus] = createSignal("");
   const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const [pickerMode, setPickerMode] = createSignal<NotePickerMode>("open");
@@ -680,6 +681,25 @@ export function createLibrarySession() {
       setBusy(false);
     }
   }
+  async function exportWebsite() {
+    if (columns().some(column => column.source !== column.document.source) &&
+        !await confirm("The website will include saved files only. Unsaved drafts will stay in the editor. Export saved content?", { title: "Export website", kind: "info" })) return;
+    const destination = await saveDialog({ title: "Export website directory", defaultPath: `${library()}-website` });
+    if (!destination) return;
+    const exists = await invoke<boolean>("web_export_destination_exists", { destination });
+    if (exists && !await confirm("Replace the website at this location? Only a previous dox website export can be replaced.", { title: "Replace website", kind: "warning" })) return;
+    const progress = new Channel<{ completed: number; total: number; message: string }>();
+    progress.onmessage = update => setExportStatus(update.total ? `${update.message} (${update.completed}/${update.total})` : update.message);
+    setExportStatus("Exporting website…");
+    try {
+      const report = await invoke<{ destination: string; notes: number; attachments: number; warnings: string[] }>("export_web", { destination, replace: exists, progress });
+      setExportStatus(`Exported ${report.notes} items and ${report.attachments} attachments to ${report.destination}`);
+      if (report.warnings.length) setWarning(report.warnings.join("\n"));
+    } catch (error) {
+      setExportStatus("");
+      throw error;
+    }
+  }
   const commandHandlers: Record<CommandId, () => void | Promise<void>> = {
     commands: () => {
       setCommandPanelOpen(true);
@@ -701,6 +721,7 @@ export function createLibrarySession() {
       setPublicationImportOpen(true);
     },
     "open-library": chooseLibrary,
+    "export-website": exportWebsite,
     "attach-files": async () => {
       const id = current()?.note.id;
       if (id) await attachFiles(id);
@@ -746,6 +767,7 @@ export function createLibrarySession() {
       case "daily-note":
       case "new-literature":
       case "import-publication":
+      case "export-website":
         return !!library();
       case "undo-delete":
         return !!lastDeleted();
@@ -892,6 +914,7 @@ export function createLibrarySession() {
     warning,
     lastDeleted,
     busy,
+    exportStatus,
     external,
     commandPanelOpen,
     publicationImportOpen,

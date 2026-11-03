@@ -28,17 +28,20 @@ export default function LibraryPage() {
       titlebar={nativeTitlebar}
       mainRef={app.bindMain}
       status={
-        <Show when={app.library()}>
-          {(path) => {
-            const parts = splitLibraryPath(path());
-            return (
-              <span class="flex min-w-0 items-baseline" title={path()}>
-                <span class="min-w-0 truncate text-subtle">{parts.parent}</span>
-                <span class="shrink-0">{parts.name}</span>
-              </span>
-            );
-          }}
-        </Show>
+        <>
+          <Show when={app.exportStatus()}><span class="min-w-0 truncate" title={app.exportStatus()}>{app.exportStatus()}</span></Show>
+          <Show when={app.library()}>
+            {(path) => {
+              const parts = splitLibraryPath(path());
+              return (
+                <span class="flex min-w-0 items-baseline" title={path()}>
+                  <span class="min-w-0 truncate text-subtle">{parts.parent}</span>
+                  <span class="shrink-0">{parts.name}</span>
+                </span>
+              );
+            }}
+          </Show>
+        </>
       }
       header={<NoteToolbar titlebar={nativeTitlebar} />}
       overlays={

@@ -53,6 +53,36 @@ cargo run -p dox-cli -- --library ~/Notes watch
 
 Replace `ABC12` with an actual generated ID. `show` returns source, merged metadata, and a revision. `save ABC12 --revision REVISION` reads source from stdin and refuses to overwrite a changed revision. Structured commands emit JSON; `render` emits HTML. `list` also accepts `--search`.
 
+## Static website export
+
+Choose **Export website…** in the desktop command panel, or use the CLI:
+
+```sh
+dox --library ~/Notes export-web ~/Notes-website
+# Replace a previous dox website export:
+dox --library ~/Notes export-web ~/Notes-website --replace
+```
+
+The destination's parent directory must already exist. The exporter creates the destination directory; it must be outside the library. Replacement is allowed only for a directory containing a valid `.dox-export.json` marker. The new export is staged before the previous one is replaced. Export uses saved files and preserves editor drafts. Items that cannot be rendered stop the export; missing link targets produce warnings. An export also stops if the library changes while it is being generated.
+
+Upload the **contents** of the output directory to a static host, such as GitHub Pages or Cloudflare Pages. Keep the generated directory structure intact, including `snapshots/`, `assets/`, and `attachments/`. The export includes `.nojekyll` for GitHub Pages. It works both at a domain root and beneath a path such as `/my-notes/`; hash-based note URLs need no server rewrites. There is no server-side application, provider account integration, or deployment command. Hosting access controls determine who can read the exported content.
+
+The reader is a separate Solid app built for phones and tablets, with a single reading area and a searchable library sidebar. On phones the library takes the full screen until a note is opened; on tablets and computers the sidebar stays visible beside the note. Search matches words in titles, tags, and IDs. Links, citations, backlinks, rich titles, math, and literature remain available. Browser Back/Forward navigates between notes. **⌘K / Ctrl-K** opens search. Note sources, local filesystem diagnostics, `.cache`, and `.trash` are excluded; supported attachments are copied into the website.
+
+On HTTPS (or localhost), the reader automatically downloads all rendered notes, required images, and its own application assets. Wait for **Available offline** in the library panel before disconnecting. A web app manifest supports installation through the browser's install or Add to Home Screen action. Attachments are available online; use the download icon beside an attachment to keep it offline. Its checkmark icon removes only that browser's downloaded copy. The refresh icon beside the offline status checks for updates. Browser storage limits or eviction can affect offline availability; failures are shown with a retry action. Ordinary Typst images are embedded; library-local raw HTML images are packaged. External image dependencies, responsive image sources, and URL-based CSS resources stop export rather than creating incomplete offline notes.
+
+To update the website, export again and replace the hosted contents. The reader downloads and verifies the complete new snapshot before showing **Open updated library**. Activating it reloads open reader tabs. Failed update downloads retain the previous offline snapshot; unchanged downloaded attachments carry forward. Exports are read-only snapshots, with no editing or synchronization back to the desktop library.
+
+The reader has its own dependencies, navigation, styles, and state in `web-reader/`. Only the content preparation helpers and Typst content styles in `packages/note-content/` are shared with the desktop viewer. Its prebuilt `web-reader/dist/` bundle is checked into the repository and embedded by Rust, so ordinary Rust builds and website exports need no Node installation. After changing reader code or shared content helpers, regenerate that bundle before rebuilding Rust:
+
+```sh
+cd web-reader
+npm ci
+npm run build
+```
+
+From `crates/dox-gui`, `npm run build:web` also regenerates the reader bundle once its dependencies are installed. The desktop frontend still builds separately. The export worker template lives in `web-reader/worker.js` and receives its resource list and hashes during export.
+
 ## Library format
 
 ```text

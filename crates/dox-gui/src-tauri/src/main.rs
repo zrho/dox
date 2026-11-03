@@ -44,6 +44,35 @@ where
     .map_err(error)?
 }
 #[tauri::command]
+fn web_export_destination_exists(destination: String) -> Result<bool, String> {
+    match std::fs::symlink_metadata(destination) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+#[tauri::command]
+async fn export_web(
+    destination: String,
+    replace: bool,
+    progress: tauri::ipc::Channel<dox_core::ExportProgress>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<dox_core::ExportReport, String> {
+    with_library(window, state, move |library| {
+        library.export_web(
+            dox_core::ExportOptions {
+                destination: destination.into(),
+                replace,
+            },
+            |update| {
+                let _ = progress.send(update);
+            },
+        )
+    })
+    .await
+}
+#[tauri::command]
 async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let lib = Library::init(path).map_err(error)?;
@@ -253,6 +282,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             windows::new_window,
             fuzzy_find,
+            export_web,
+            web_export_destination_exists,
             open_library,
             list_notes,
             cached_notes,
