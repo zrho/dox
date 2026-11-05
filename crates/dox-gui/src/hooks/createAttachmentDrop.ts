@@ -15,6 +15,7 @@ export function createAttachmentDrop(options: {
   });
   onMount(() => {
     if (!isTauri()) return;
+    const macOS = navigator.userAgent.includes("Macintosh");
     let stopped = false;
     let unlisten: (() => void) | undefined;
     void getCurrentWebview().onDragDropEvent(({ payload }) => {
@@ -23,9 +24,12 @@ export function createAttachmentDrop(options: {
         setTarget(undefined);
         return;
       }
-      // Native positions are physical pixels; DOM hit testing uses CSS pixels.
-      // Read the current ratio each time so moving between displays still works.
-      const position = payload.position.toLogical(window.devicePixelRatio);
+      // Wry 0.57.1 sends macOS positions in AppKit points, despite Tauri
+      // wrapping them as PhysicalPosition. These already match CSS pixels.
+      // Read the ratio per event on other platforms to handle display changes.
+      const position = macOS
+        ? payload.position
+        : payload.position.toLogical(window.devicePixelRatio);
       const key = options.targetAt(position.x, position.y);
       if (payload.type === "drop") {
         setTarget(undefined);
