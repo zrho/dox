@@ -55,8 +55,13 @@ export type DeletedNote = {
   trash_entry: string;
 };
 
-export type NoteColumn = {
+/** Shared identity; content state belongs to each tagged pane variant. */
+export type WorkspacePaneBase = {
   key: number;
+  kind: string;
+};
+export type NotePane = WorkspacePaneBase & {
+  kind: "note";
   document: Document;
   source: string;
   html: string;
@@ -65,3 +70,9 @@ export type NoteColumn = {
   editorZoom: number;
   viewZoom: number;
 };
+
+// Add new content variants here as the workspace gains other views.
+export type WorkspacePane = NotePane;
+export function isNotePane(pane: WorkspacePane): pane is NotePane {
+  return pane.kind === "note";
+}

@@ -1,7 +1,7 @@
 import { Show } from "solid-js";
 import { isTauri } from "@tauri-apps/api/core";
 import NoteToolbar from "../components/features/NoteToolbar";
-import NoteColumns from "../components/features/NoteColumns";
+import LibraryWorkspace from "../components/features/LibraryWorkspace";
 import DiagnosticsPanel from "../components/features/DiagnosticsPanel";
 import PublicationImportDialog from "../components/features/PublicationImportDialog";
 import { CommandPicker, NotePicker } from "../components/features/AppPickers";
@@ -97,25 +97,7 @@ export default function LibraryPage() {
           This note changed on disk. Your draft is preserved.
         </Alert>
       </Show>
-      <NoteColumns
-        columns={app.columns()}
-        activeKey={app.activeKey()}
-        revealRequest={app.columnReveal()}
-        notes={app.index().notes}
-        busy={app.busy()}
-        onActivate={app.activateColumn}
-        onMove={app.moveColumn}
-        onAttach={app.attachFiles}
-        onDropFiles={app.attachFiles}
-        onError={app.reportError}
-        onOpenAttachment={app.openAttachment}
-        onRemoveAttachment={app.removeAttachment}
-        onNavigate={app.openLinked}
-        onSourceChange={app.setColumnSource}
-        getNoteTitle={app.getNoteTitle}
-        bindEditor={app.bindEditor}
-        unbindEditor={app.unbindEditor}
-      />
+      <LibraryWorkspace app={app} />
       <DiagnosticsPanel
         diagnostics={app.index().diagnostics}
         noteIds={app.index().notes.map((note) => note.id)}

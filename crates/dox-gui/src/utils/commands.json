@@ -23,7 +23,7 @@
     }
   },
   "previous-pane": {
-    "title": "Focus previous note",
+    "title": "Focus previous pane",
     "binding": {
       "key": "j",
       "aliases": ["arrowleft"],
@@ -32,7 +32,7 @@
     }
   },
   "next-pane": {
-    "title": "Focus next note",
+    "title": "Focus next pane",
     "binding": {
       "key": "k",
       "aliases": ["arrowright"],
@@ -41,7 +41,7 @@
     }
   },
   "move-pane-previous": {
-    "title": "Move note left",
+    "title": "Move pane left",
     "binding": {
       "key": "j",
       "aliases": ["arrowleft"],
@@ -51,7 +51,7 @@
     }
   },
   "move-pane-next": {
-    "title": "Move note right",
+    "title": "Move pane right",
     "binding": {
       "key": "k",
       "aliases": ["arrowright"],
