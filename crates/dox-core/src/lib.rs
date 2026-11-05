@@ -856,6 +856,20 @@ impl Library {
     /// reference and return a warning, so callers can offer a retry.
     pub fn import_publication(&self, input: &str) -> Result<PublicationImport> {
         let bibtex = publication::lookup(input)?;
+        self.import_bibtex_source(&bibtex)
+    }
+
+    /// Import one local reference, attaching its PDF when its source is supported.
+    pub fn import_bibtex(&self, path: impl AsRef<Path>) -> Result<PublicationImport> {
+        let path = path.as_ref();
+        let source = fs::read_to_string(path)
+            .with_context(|| format!("Couldn't read BibTeX file {}", path.display()))?;
+        self.import_bibtex_source(&source)
+    }
+
+    fn import_bibtex_source(&self, source: &str) -> Result<PublicationImport> {
+        // Validate and normalize before creating any library files.
+        let bibtex = literature::with_key(source, "IMPORT")?;
         let entry = literature::parse(&bibtex, "IMPORT")?;
         let pdf = publication_pdf::PdfSource::from_entry(&entry);
         let mut document = self.create_inner(None, vec![], "literature", Some(&bibtex), None)?;

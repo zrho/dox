@@ -86,6 +86,9 @@
   "import-publication": {
     "title": "Import publication from link or tag"
   },
+  "import-bibtex": {
+    "title": "Import literature from BibTeX file…"
+  },
   "open-library": {
     "title": "Open library"
   },

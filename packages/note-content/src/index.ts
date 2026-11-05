@@ -55,7 +55,7 @@ dl{margin:.4em 0}dt{margin-top:.3em;font-weight:600}dd{margin:.1em 0 .3em 1.5em}
 .literature-abstract h2{margin:0;color:var(--color-document-muted);font:500 9px/18px var(--font-sans);letter-spacing:1px;text-transform:uppercase}
 @media(max-width:480px){.literature-fields th{width:100px}.literature-fields td{padding-right:0}}
 
-a{color:var(--color-document-link);text-decoration:none}pre,code{text-wrap-style:auto}pre{overflow:auto}
+.note-content a[href]{color:var(--color-document-link);text-decoration:none}pre,code{text-wrap-style:auto}pre{overflow:auto}
 svg,img{max-width:100%;height:auto}blockquote{border-left:2px solid var(--color-document-border-strong);padding-left:12px;margin-left:0}
 /* Adapt Typst's default math foreground for paper; retain other SVG colors. */
 svg [fill="#cdd6f4"]{fill:var(--color-document-foreground)}

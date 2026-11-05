@@ -79,7 +79,7 @@ pub(crate) fn with_key(source: &str, id: &str) -> Result<String> {
     } = single_entry(source)?;
     ensure!(
         field(&entry, "title").is_some_and(|title| !title.trim().is_empty()),
-        "The metadata service returned a reference without a title"
+        "The BibTeX reference must have a nonempty title"
     );
     let mut edits = bare_months
         .into_iter()

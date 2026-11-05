@@ -162,6 +162,14 @@ async fn import_publication(
     .await
 }
 #[tauri::command]
+async fn import_bibtex(
+    path: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+) -> Result<PublicationImport, String> {
+    with_library(window, state, move |library| library.import_bibtex(path)).await
+}
+#[tauri::command]
 async fn find_paper_pdf(
     id: String,
     source: Option<String>,
@@ -292,6 +300,7 @@ fn main() {
             open_daily_note,
             create_literature,
             import_publication,
+            import_bibtex,
             find_paper_pdf,
             save_note,
             render_note,

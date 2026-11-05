@@ -661,24 +661,39 @@ export function createLibrarySession() {
     setWarning("");
     try {
       const imported = await invoke<PublicationImport>("import_publication", { input });
-      const doc = imported.document;
-      setWarning(imported.warnings.join("\n"));
-      ++indexRequest;
-      ++request;
-      // Append the imported item without disturbing any open drafts.
-      const key = addColumn(doc, "", "edit");
-      setIndex((previous) => ({ ...previous, notes: [doc.note, ...previous.notes] }));
-      // Creation has succeeded. A later render/refresh failure must not invite
-      // another import of the same item; leave its source available instead.
-      try {
-        const html = await invoke<string>("render_note", { id: doc.note.id });
-        updateColumn(key, { html, mode: "view" });
-        await refresh();
-      } catch (error) {
-        setError(String(error));
-      }
+      await showImportedPublication(imported);
     } finally {
       setBusy(false);
+    }
+  }
+  async function importBibtex() {
+    const path = await open({
+      title: "Import literature from BibTeX file",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "BibTeX", extensions: ["bib"] }],
+    });
+    if (!path) return;
+    setWarning("");
+    const imported = await invoke<PublicationImport>("import_bibtex", { path });
+    await showImportedPublication(imported);
+  }
+  async function showImportedPublication(imported: PublicationImport) {
+    const doc = imported.document;
+    setWarning(imported.warnings.join("\n"));
+    ++indexRequest;
+    ++request;
+    // Append the imported item without disturbing any open drafts.
+    const key = addColumn(doc, "", "edit");
+    setIndex((previous) => ({ ...previous, notes: [doc.note, ...previous.notes] }));
+    // Creation has succeeded. A later render/refresh failure must not invite
+    // another import of the same item; leave its source available instead.
+    try {
+      const html = await invoke<string>("render_note", { id: doc.note.id });
+      updateColumn(key, { html, mode: "view" });
+      await refresh();
+    } catch (error) {
+      setError(String(error));
     }
   }
   async function exportWebsite() {
@@ -720,6 +735,7 @@ export function createLibrarySession() {
     "import-publication": () => {
       setPublicationImportOpen(true);
     },
+    "import-bibtex": importBibtex,
     "open-library": chooseLibrary,
     "export-website": exportWebsite,
     "attach-files": async () => {
@@ -767,6 +783,7 @@ export function createLibrarySession() {
       case "daily-note":
       case "new-literature":
       case "import-publication":
+      case "import-bibtex":
       case "export-website":
         return !!library();
       case "undo-delete":
