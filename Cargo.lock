@@ -1283,6 +1283,7 @@ dependencies = [
  "dirs 6.0.0",
  "dom_query",
  "jiff",
+ "libc",
  "notify",
  "nucleo-matcher",
  "percent-encoding",

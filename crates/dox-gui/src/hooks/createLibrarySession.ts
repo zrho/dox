@@ -22,6 +22,7 @@ import type {
     PublicationImport,
 } from "../types";
 import { isNotePane } from "../types";
+import { createGitSession } from "./createGitSession";
 import { createDesktopLifecycle } from "./createDesktopLifecycle";
 const defaultZoom = { editorZoom: 100, viewZoom: 90 };
 export function createLibrarySession() {
@@ -115,6 +116,11 @@ export function createLibrarySession() {
             prefix,
         );
     }
+    function showGitChanges() {
+        const existing = panes().find((pane) => pane.kind === "git-changes");
+        if (existing) revealPane(existing.key);
+        else addPane({ key: ++nextPaneKey, kind: "git-changes" });
+    }
     function focusActive() {
         const pane = activePane();
         const frame = pane && paneFrames.get(pane.key);
@@ -198,7 +204,13 @@ export function createLibrarySession() {
     const [error, setError] = createSignal("");
     const [warning, setWarning] = createSignal("");
     const [lastDeleted, setLastDeleted] = createSignal<DeletedNote>();
-    const [busy, setBusy] = createSignal(false);
+    const [localBusy, setBusy] = createSignal(false);
+    const git = createGitSession({
+        library,
+        draftTitles: () => notePanes().filter(notePaneDirty).map((pane) => titleText(pane.document.note)),
+        busy: localBusy,
+    });
+    const busy = () => localBusy() || git.frozen();
     const [exportStatus, setExportStatus] = createSignal("");
     const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
     const [pickerOpen, setPickerOpen] = createSignal(false);
@@ -372,17 +384,18 @@ export function createLibrarySession() {
         if (!path) return;
         await openLibrary(path);
     }
-    async function save() {
-        if (!current()) return;
+    async function saveNotePane(key: number) {
+        const pane = notePanes().find((pane) => pane.key === key);
+        if (!pane) return;
+        const root = library();
         ++indexRequest;
         const doc = await invoke<Document>("save_note", {
-            id: current()!.note.id,
-            source: source(),
-            revision: current()!.note.revision,
+            id: pane.document.note.id,
+            source: pane.source,
+            revision: pane.document.note.revision,
         });
-        setCurrent(doc);
-        setSource(doc.source);
-        setExternal(false);
+        if (library() !== root) return;
+        updateNotePane(key, { document: doc, source: doc.source, external: false });
         // Show save-time diagnostics immediately, even before the library refresh finishes.
         setIndex((previous) => ({
             ...previous,
@@ -396,7 +409,18 @@ export function createLibrarySession() {
                 ...doc.note.diagnostics,
             ],
         }));
+    }
+    async function save() {
+        const pane = activeNotePane();
+        if (!pane) return;
+        await saveNotePane(pane.key);
         await refresh();
+    }
+    async function saveAllDrafts() {
+        const keys = notePanes().filter(notePaneDirty).map((pane) => pane.key);
+        for (const key of keys) await saveNotePane(key);
+        await refresh();
+        await git.refresh(true);
     }
     async function refreshAttachments(id: string) {
         const attachments = await invoke<Attachment[]>("list_attachments", {
@@ -513,7 +537,7 @@ export function createLibrarySession() {
             if (!editor()) return;
             let position = 0;
             const ownDocument = current()?.note.metadata.document;
-            const notePath = `${current()?.note.id}/${ownDocument}`;
+            const notePath = `notes/${current()?.note.id}/${ownDocument}`;
             const isOwnDocument =
                 diagnostic.document === ownDocument ||
                 diagnostic.document === notePath ||
@@ -851,6 +875,12 @@ export function createLibrarySession() {
         },
         "import-bibtex": importBibtex,
         "open-library": chooseLibrary,
+        "show-git-changes": showGitChanges,
+        "git-check": () => git.act("fetch"),
+        "git-commit": () => { showGitChanges(); return git.act("commit"); },
+        "git-pull": () => git.act("pull"),
+        "git-push": () => git.act("push"),
+        "save-all-drafts": saveAllDrafts,
         "export-website": exportWebsite,
         "attach-files": async () => {
             const id = current()?.note.id;
@@ -892,6 +922,13 @@ export function createLibrarySession() {
             case "commands":
             case "open-library":
                 return true;
+            case "git-check":
+                return !!library() && !!git.snapshot()?.status.available && !git.operation();
+            case "git-commit": return git.canCommit();
+            case "git-pull": return git.canPull();
+            case "git-push": return git.canPush();
+            case "save-all-drafts": return anyDirty();
+            case "show-git-changes":
             case "find":
             case "new-note":
             case "daily-note":
@@ -947,6 +984,7 @@ export function createLibrarySession() {
         if (
             [
                 "commands",
+                "show-git-changes", "git-check", "git-commit", "git-pull", "git-push",
                 "new-window",
                 "import-publication",
                 "find",
@@ -1025,7 +1063,7 @@ export function createLibrarySession() {
             pickerOpen() || commandPanelOpen() || publicationImportOpen(),
         editorFocused: () => editor()?.hasFocus ?? false,
         dismissMessage,
-        onChange: () => run(syncFromDisk),
+        onChange: async () => { void git.refresh(true); await run(syncFromDisk); },
         onCommand: executeCommand,
         onRestoreLibrary: (path) => run(() => openLibrary(path)),
         onError: (error) => setError(String(error)),
@@ -1033,6 +1071,11 @@ export function createLibrarySession() {
     return {
         library,
         index,
+        git,
+        showGitChanges,
+        saveAllDrafts: () => { void run(saveAllDrafts); },
+        hasDrafts: anyDirty,
+        openWorkspaceNote: (id: string) => { void run(() => openItem(id)); },
         panes,
         activeKey,
         paneReveal,
@@ -1080,8 +1123,9 @@ export function createLibrarySession() {
         openLinked: (id: string, fromKey: number) => {
             void run(() => openLinked(id, fromKey));
         },
-        setNoteSource: (key: number, source: string) =>
-            updateNotePane(key, { source }),
+        setNoteSource: (key: number, source: string) => {
+            if (!git.frozen()) updateNotePane(key, { source });
+        },
         openNote: (id: string) => {
             void run(() => load(id));
         },

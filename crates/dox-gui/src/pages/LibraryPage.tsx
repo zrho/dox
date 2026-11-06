@@ -41,6 +41,12 @@ export default function LibraryPage() {
               );
             }}
           </Show>
+          <Show when={app.library()}>
+            <button type="button" class="shrink-0 text-muted hover:text-foreground" onClick={app.showGitChanges}
+              title="Show library changes">
+              {app.git.statusLabel()}
+            </button>
+          </Show>
         </>
       }
       header={<NoteToolbar titlebar={nativeTitlebar} />}

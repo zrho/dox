@@ -2,6 +2,7 @@ use dox_core::{Attachment, DeletedNote, Library, LibraryIndex, NoteDocument, Pub
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{Emitter, Manager, State};
 
+mod git;
 mod windows;
 
 struct Session {
@@ -43,6 +44,27 @@ where
     .await
     .map_err(error)?
 }
+// Serialize library mutations against commit and pull in every window.
+async fn with_library_write<T, E>(
+    window: tauri::WebviewWindow,
+    state: State<'_, Sessions>,
+    action: impl FnOnce(Library) -> Result<T, E> + Send + 'static,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+{
+    let library = library(&state, &window)?;
+    let repo = window
+        .state::<git::Coordinator>()
+        .repository(library.root());
+    tauri::async_runtime::spawn_blocking(move || {
+        let _write = repo.writes.read().map_err(error)?;
+        action(library).map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(error)?
+}
 #[tauri::command]
 fn web_export_destination_exists(destination: String) -> Result<bool, String> {
     match std::fs::symlink_metadata(destination) {
@@ -75,7 +97,12 @@ async fn export_web(
 #[tauri::command]
 async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let lib = Library::init(path).map_err(error)?;
+        git::switching_allowed(window.app_handle(), window.label())?;
+        std::fs::create_dir_all(&path).map_err(error)?;
+        let root_path = std::fs::canonicalize(&path).map_err(error)?;
+        let repo = window.state::<git::Coordinator>().repository(&root_path);
+        let _write = repo.writes.read().map_err(error)?;
+        let lib = Library::init(root_path).map_err(error)?;
         let handle = window.clone();
         let watcher = lib
             .watch(move || {
@@ -83,6 +110,7 @@ async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<Stri
             })
             .map_err(error)?;
         let root = lib.root().to_string_lossy().into_owned();
+        git::switching_allowed(window.app_handle(), window.label())?;
         let state = window.state::<Sessions>();
         let mut sessions = state.lock().map_err(error)?;
         // A library can finish opening after its window has been closed.
@@ -101,7 +129,10 @@ async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<Stri
             },
         );
         drop(sessions);
-        drop(previous);
+        if let Some(previous) = previous {
+            git::forget_window(window.app_handle(), window.label(), previous.library.root());
+            drop(previous);
+        }
         Ok(root)
     })
     .await
@@ -134,21 +165,21 @@ async fn create_note(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(window, state, |library| library.create_untitled()).await
+    with_library_write(window, state, |library| library.create_untitled()).await
 }
 #[tauri::command]
 async fn open_daily_note(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(window, state, |library| library.open_daily_note()).await
+    with_library_write(window, state, |library| library.open_daily_note()).await
 }
 #[tauri::command]
 async fn create_literature(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(window, state, |library| library.create_literature()).await
+    with_library_write(window, state, |library| library.create_literature()).await
 }
 #[tauri::command]
 async fn import_publication(
@@ -156,7 +187,7 @@ async fn import_publication(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<PublicationImport, String> {
-    with_library(window, state, move |library| {
+    with_library_write(window, state, move |library| {
         library.import_publication(&input)
     })
     .await
@@ -167,7 +198,7 @@ async fn import_bibtex(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<PublicationImport, String> {
-    with_library(window, state, move |library| library.import_bibtex(path)).await
+    with_library_write(window, state, move |library| library.import_bibtex(path)).await
 }
 #[tauri::command]
 async fn find_paper_pdf(
@@ -176,7 +207,7 @@ async fn find_paper_pdf(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<Attachment, String> {
-    with_library(window, state, move |library| {
+    with_library_write(window, state, move |library| {
         library.find_paper_pdf(&id, source.as_deref())
     })
     .await
@@ -189,7 +220,7 @@ async fn save_note(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(window, state, move |library| {
+    with_library_write(window, state, move |library| {
         library.save(&id, &source, &revision)
     })
     .await
@@ -201,7 +232,7 @@ async fn delete_note(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<DeletedNote, String> {
-    with_library(window, state, move |library| library.delete(&id, &revision)).await
+    with_library_write(window, state, move |library| library.delete(&id, &revision)).await
 }
 #[tauri::command]
 async fn restore_note(
@@ -209,7 +240,7 @@ async fn restore_note(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<NoteDocument, String> {
-    with_library(window, state, move |library| library.restore(&trash_entry)).await
+    with_library_write(window, state, move |library| library.restore(&trash_entry)).await
 }
 #[tauri::command]
 async fn render_note(
@@ -234,7 +265,7 @@ async fn attach_files(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<(), String> {
-    with_library(window, state, move |library| {
+    with_library_write(window, state, move |library| {
         for path in paths {
             library
                 .attach_file(&id, &path)
@@ -272,7 +303,7 @@ async fn remove_attachment(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
 ) -> Result<(), String> {
-    with_library(window, state, move |library| {
+    with_library_write(window, state, move |library| {
         library.remove_attachment(&id, &name)
     })
     .await
@@ -282,6 +313,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_macos_fps::init())
         .manage(Sessions::default())
+        .manage(git::Coordinator::default())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             windows::setup_menu(app.handle())?;
@@ -289,6 +321,11 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             windows::new_window,
+            git::git_status,
+            git::git_diff,
+            git::git_action,
+            git::git_report_drafts,
+            git::git_ready,
             fuzzy_find,
             export_web,
             web_export_destination_exists,
@@ -322,6 +359,9 @@ fn main() {
             } = &event
             {
                 let session = app.state::<Sessions>().lock().unwrap().remove(label);
+                if let Some(session) = &session {
+                    git::forget_window(app, label, session.library.root());
+                }
                 // Dropping an embedded compiler can block too.
                 tauri::async_runtime::spawn_blocking(move || drop(session));
             }

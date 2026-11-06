@@ -165,5 +165,11 @@
   },
   "undo-delete": {
     "title": "Undo last note deletion"
-  }
+  },
+  "show-git-changes": { "title": "Show library changes" },
+  "git-check": { "title": "Check for Git updates" },
+  "git-commit": { "title": "Commit library changes" },
+  "git-pull": { "title": "Pull updates" },
+  "git-push": { "title": "Push" },
+  "save-all-drafts": { "title": "Save all drafts" }
 }

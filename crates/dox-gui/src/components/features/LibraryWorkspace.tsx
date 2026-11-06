@@ -1,6 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import WorkspacePanes from "../layout/WorkspacePanes";
 import NotePaneContent from "./NotePaneContent";
+import GitChangesPaneContent from "./GitChangesPaneContent";
 import { titleText } from "./NoteTitle";
 import { createAttachmentDrop } from "../../hooks/createAttachmentDrop";
 import type { LibrarySession } from "../../hooks/createLibrarySession";
@@ -33,7 +34,7 @@ export default function LibraryWorkspace(props: { app: LibrarySession }) {
     if (isNotePane(pane)) {
       return `${titleText(pane.document.note)}${app.notePaneDirty(pane) ? " (unsaved)" : ""}`;
     }
-    return "Workspace pane";
+    return "Library changes";
   }
   return (
     <WorkspacePanes
@@ -50,7 +51,7 @@ export default function LibraryWorkspace(props: { app: LibrarySession }) {
       onInteractionChange={setInteracting}
     >
       {(pane) => (
-        <Show when={isNotePane(pane) ? pane : undefined}>
+        <Show when={isNotePane(pane) ? pane : undefined} fallback={<GitChangesPaneContent app={app} />}>
           {(notePane) => (
             <NotePaneContent
               pane={notePane()}

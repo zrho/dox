@@ -72,7 +72,48 @@ export type NotePane = WorkspacePaneBase & {
 };
 
 // Add new content variants here as the workspace gains other views.
-export type WorkspacePane = NotePane;
+export type GitChangesPane = WorkspacePaneBase & {
+  kind: "git-changes";
+};
+export type WorkspacePane = NotePane | GitChangesPane;
 export function isNotePane(pane: WorkspacePane): pane is NotePane {
   return pane.kind === "note";
 }
+
+export type GitChange = {
+  path: string;
+  status: "added" | "modified" | "deleted" | "conflict";
+  staged: boolean;
+  size: number | null;
+};
+export type GitStatus = {
+  available: boolean;
+  fingerprint: string;
+  reason: string | null;
+  branch: string | null;
+  upstream: string | null;
+  ahead: number | null;
+  behind: number | null;
+  changes: GitChange[];
+  staged: boolean;
+  conflicts: boolean;
+  blocked: string | null;
+  retry_commit: boolean;
+};
+export type GitAction = "fetch" | "commit" | "commit-push" | "pull" | "push";
+export type GitSnapshot = {
+  root: string;
+  revision: number;
+  status: GitStatus;
+  operation: GitAction | null;
+  checked_at: number | null;
+  remote_error: string | null;
+  drafts: { window: string; titles: string[] }[];
+  result: { action: GitAction; success: boolean; commit: string | null; message: string } | null;
+};
+export type GitDiff = {
+  text: string;
+  binary: boolean;
+  truncated: boolean;
+  size: number | null;
+};

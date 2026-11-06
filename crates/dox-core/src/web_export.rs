@@ -146,8 +146,7 @@ fn package_html(
             );
             let decoded = percent_encoding::percent_decode_str(&value).decode_utf8()?;
             let source = library
-                .root()
-                .join(id)
+                .note_dir(id)?
                 .join(decoded.as_ref())
                 .canonicalize()
                 .with_context(|| format!("{id}: unresolved image resource"))?;

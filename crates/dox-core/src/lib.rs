@@ -6,6 +6,7 @@ mod compiler;
 pub use attachments::Attachment;
 mod diagnostics;
 mod fuzzy;
+pub mod git;
 pub use fuzzy::{FuzzyMatch, FuzzyResult, fuzzy_find};
 mod literature;
 mod publication;
@@ -77,6 +78,7 @@ pub struct DeletedNote {
 #[derive(Debug, Clone)]
 pub struct Library {
     root: PathBuf,
+    notes: PathBuf,
     compiler: Arc<compiler::Compiler>,
     note_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
 }
@@ -120,7 +122,7 @@ fn compiler_key() -> String {
     settings.sort();
     digest(
         format!(
-            "note-ids-v2:{}:{}:{SVG_MATH}:{settings:?}",
+            "notes-directory-v1:{}:{}:{SVG_MATH}:{settings:?}",
             compiler::VERSION,
             literature::CACHE_KEY
         )
@@ -200,25 +202,36 @@ impl Library {
             .canonicalize()
             .context("Library directory does not exist")?;
         ensure!(root.is_dir(), "Library must be a directory");
+        let notes = root.join("notes");
+        fs::create_dir_all(&notes).context("Could not create notes directory")?;
+        ensure!(
+            fs::symlink_metadata(&notes)?.file_type().is_dir(),
+            "notes must be a real directory, not a symlink"
+        );
         Ok(Self {
             compiler: Arc::new(compiler::Compiler::new(root.clone())),
             root,
+            notes,
             note_locks: Arc::new(Mutex::new(HashMap::new())),
         })
     }
     pub fn root(&self) -> &Path {
         &self.root
     }
+    /// Directory containing all note, daily-note, and literature item directories.
+    pub fn notes_root(&self) -> &Path {
+        &self.notes
+    }
     fn note_dir(&self, id: &str) -> Result<PathBuf> {
         ensure!(valid_id(id), "Invalid note ID: {id}");
         let dir = self
-            .root
+            .notes
             .join(id)
             .canonicalize()
             .context("Note does not exist")?;
         ensure!(
-            dir.starts_with(&self.root),
-            "Note directory escapes library"
+            dir.starts_with(&self.notes) && dir != self.notes,
+            "Note directory escapes notes directory"
         );
         Ok(dir)
     }
@@ -250,7 +263,7 @@ impl Library {
     }
     /// Stable generated wrapper preserves the original document's relative imports.
     fn citation_document(&self, doc: &Path) -> Result<PathBuf> {
-        let relative_doc = doc.strip_prefix(&self.root)?;
+        let relative_doc = doc.strip_prefix(&self.notes)?;
         let id = relative_doc
             .components()
             .next()
@@ -260,7 +273,7 @@ impl Library {
             return Ok(doc.to_owned());
         }
         let mut entries = vec![];
-        for entry in fs::read_dir(&self.root)? {
+        for entry in fs::read_dir(&self.notes)? {
             let entry = entry?;
             let key = entry.file_name().to_string_lossy().into_owned();
             if !valid_id(&key) {
@@ -332,7 +345,7 @@ impl Library {
             Ok(())
         }
         let mut hash = Sha256::new();
-        hash.update(b"dox-index-v4-link-validation");
+        hash.update(b"dox-index-v5-notes-directory");
         hash.update(compiler::VERSION.as_bytes());
         visit(&self.root, &mut hash)?;
         Ok(format!("{:x}", hash.finalize()))
@@ -728,11 +741,11 @@ impl Library {
         {
             index
                 .notes
-                .retain(|note| valid_id(&note.id) && self.root.join(&note.id).is_dir());
+                .retain(|note| valid_id(&note.id) && self.notes.join(&note.id).is_dir());
             return Ok(index);
         }
         let mut notes = vec![];
-        for entry in fs::read_dir(&self.root)? {
+        for entry in fs::read_dir(&self.notes)? {
             let entry = entry?;
             let id = entry.file_name().to_string_lossy().into_owned();
             if !valid_id(&id) || !entry.file_type()?.is_dir() {
@@ -792,7 +805,7 @@ impl Library {
         let mut notes = vec![];
         let mut warnings = vec![];
         let mut diagnostics = vec![];
-        for entry in fs::read_dir(&self.root)? {
+        for entry in fs::read_dir(&self.notes)? {
             let entry = entry?;
             let id = entry.file_name().to_string_lossy().into_owned();
             if !valid_id(&id) || !entry.file_type()?.is_dir() {
@@ -892,7 +905,10 @@ impl Library {
         daily_id: Option<&str>,
     ) -> Result<NoteDocument> {
         if let Some(id) = daily_id {
-            ensure!(id.len() == 10 && valid_id(id), "Invalid daily note ID: {id}");
+            ensure!(
+                id.len() == 10 && valid_id(id),
+                "Invalid daily note ID: {id}"
+            );
         }
         let heading = title.or(daily_id).unwrap_or("Untitled");
         const ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -903,7 +919,7 @@ impl Library {
                     .map(|_| ALPHABET[rng.random_range(0..36)] as char)
                     .collect::<String>()
             });
-            let dir = self.root.join(&id);
+            let dir = self.notes.join(&id);
             match fs::create_dir(&dir) {
                 Ok(()) => {
                     let result = (|| -> Result<NoteDocument> {
@@ -1027,7 +1043,7 @@ impl Library {
             "Conflict: this note changed on disk. Reload it before deleting."
         );
         Self::init(&self.root)?;
-        let source = self.root.join(id);
+        let source = self.notes.join(id);
         ensure!(
             fs::symlink_metadata(&source)?.file_type().is_dir(),
             "Cannot delete a symlinked note directory"
@@ -1074,7 +1090,7 @@ impl Library {
             fs::symlink_metadata(&source)?.file_type().is_dir(),
             "Trash entry must be a real directory"
         );
-        let destination = self.root.join(id);
+        let destination = self.notes.join(id);
         ensure!(
             fs::symlink_metadata(&destination)
                 .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),

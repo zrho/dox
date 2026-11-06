@@ -3,7 +3,7 @@
   - MVP: create, edit, and browse linked notes with tags and backlinks.
   - Initially single-user and local, with macOS as the priority platform.
   - Support one library initially; leave room for multiple libraries later.
-  - Keep library files suitable for Git backup; dedicated Git integration comes later.
+  - Support lightweight Git history and moving libraries between computers through a changes pane; leave repository setup and advanced Git work external.
   - Advanced reference management and AI features are outside the MVP; single-entry BibTeX literature items are supported.
 
 - Architecture
@@ -14,7 +14,7 @@
   - Future AI functionality lives in `dox-core` and is exposed through both CLI and GUI; behavior will be specified later.
 
 - Library and storage
-  - Store notes in the filesystem, with one directory per note.
+  - Store notes in the filesystem under the library’s `notes/` directory, with one directory per note. Keep `.git`, `.cache`, and `.trash` at the library root.
   - Each note has a randomly generated ID matching `[0-9A-Z]{5}`, unique within its library.
   - Each note contains one source document and a `meta.json` referencing that document.
   - Required metadata: note type and source document reference.
@@ -49,7 +49,7 @@
 
 - Editing and UI
   - Use Lucide icons, including a type icon for each item.
-  - Show the open library path in the status bar, truncating the path while keeping the full value in a tooltip. Keep it free of branding, counts, and action buttons; open libraries through the command panel, and omit a dedicated tags panel for now.
+  - Show the open library path in the status bar, truncating the path while keeping the full value in a tooltip. Show a compact clickable Git status item beside the path for branch, changed files, and ahead/behind counts; open libraries through the command panel, and omit a dedicated tags panel for now.
   - Use Command-P to open a compact fuzzy note picker with title/ID matching, arrow-key selection, Enter to focus and reveal an existing pane or append a new one, preserving existing panes and drafts, and Escape to dismiss.
   - Provide a New empty literature item command, showing literature in pickers with a book icon.
   - Command-Shift-P opens a fuzzy command panel with keyboard navigation and displayed keybindings. Define commands and their keybindings centrally.
@@ -74,3 +74,11 @@
   - Capture compiler warnings; invalid metadata dates and unsupported note types are warnings.
   - Include stable IDs, diagnostic codes, messages, originating note/document, optional source coordinates, related note targets, and optional suggested-action data.
   - Show a compact library diagnostics panel with severity filters, expandable details, and navigation to the originating note/source position. Diagnostics refer to saved files.
+
+- Lightweight Git integration
+  - Require an existing regular repository rooted at the library, with identity, remote upstream, and authentication configured externally. Use system Git on worker threads.
+  - Show one reorderable Library changes workspace pane per window, grouping files by note and expanding bounded read-only text diffs inline. Show binary attachment filenames and sizes.
+  - Commit all saved nonignored changes with an optional message, locally or followed by push. Require saving drafts in every associated window; offer Save all drafts for the current window. Keep hooks and signing active, preserve staging after failure, and refuse staging created externally.
+  - Automatically check the remote on opening, app focus with a cooldown, and every five active minutes. Keep commit, pull, and push explicit. Pull only with a clean working tree and fast-forward history; never automatically stash or resolve divergence.
+  - Share Git state and serialize operations per canonical repository path. Coordinate commit/pull with all windows and existing library writes; refresh notes after pulling. Keep offline work available and distinguish local commit success from push failure.
+  - Exclude cloning, repository setup, branch management, staging controls, conflict resolution, history rewriting, and note history. Preserve .cache/.trash ignore rules and require externally untracking previously committed generated files.

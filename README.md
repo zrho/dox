@@ -16,7 +16,7 @@ Open the command panel with ⌘⇧P and choose **Open library**, then choose an 
 
 Note columns are at most 520px wide and scroll horizontally with a hidden scrollbar. Drag a pane by the narrow strip beneath its top edge to reorder it; neighbouring panes slide aside and the pane settles into place on release. Drag near either edge to scroll, or press Escape to cancel. Reordering preserves open drafts and scroll positions, and animations respect reduced-motion preferences. Rendered content and the source editor both use the system sans-serif font, and a note's scrollbar fades out once scrolling stops.
 
-The desktop workspace separates shared pane layout and navigation from pane content. Panes have stable keys and a content kind; notes are currently the only kind. Note editing, backlinks, attachments, and draft handling belong to note panes, while scrolling, focus navigation, closing, and reordering work at the workspace level. Future views such as Git changes can use the same pane layout.
+The desktop workspace separates shared pane layout and navigation from pane content. Panes have stable keys and a content kind; notes are currently the only kind. Note editing, backlinks, attachments, and draft handling belong to note panes, while scrolling, focus navigation, closing, and reordering work at the workspace level. The Library changes view uses the same pane layout as notes.
 
 Outside text fields, **j / ←** focuses the previous open pane and **k / →** the next, scrolling it into view in the current pane order and stopping at either end. **Shift-J / Shift-←** and **Shift-K / Shift-→** swap the focused pane with its neighbour in that direction. These shortcuts preserve text entry and caret movement in editors, inputs, and editable content. **D** deletes the focused note after a confirmation dialog; the **Undo last note deletion** command restores it. **Escape** first dismisses error or warning messages; when editing a note, it saves and switches to view mode through the same action as **E**. In view mode it retains the existing pane closing behavior. Dialogs keep their own Escape handling, and holding Escape does not cascade through several actions. Diagnostics remain separate from dismissible messages.
 
@@ -89,19 +89,24 @@ From `crates/dox-gui`, `npm run build:web` also regenerates the reader bundle on
 
 ```text
 Notes/
-  .gitignore              # ignores /.cache/
-  ABC12/
-    meta.json
-    note.typ
-    attachments/           # optional files copied into the item
-      paper.pdf
-  2026-10-30/              # daily note, with its date as its ID
-    meta.json
-    note.typ
-  .cache/                 # disposable HTML and metadata indexes
+  .gitignore               # ignores /.cache/ and /.trash/
+  notes/
+    ABC12/
+      meta.json
+      note.typ
+      attachments/         # optional files copied into the item
+        paper.pdf
+    2026-10-30/            # daily note, with its date as its ID
+      meta.json
+      note.typ
+    XYZ89/                 # literature item
+      meta.json
+      reference.bib
+  .cache/                  # disposable HTML and metadata indexes
+  .trash/                  # deleted note directories
 ```
 
-Only `type` and `document` are required in `meta.json`. The document path is relative to the note directory. Unknown note types remain readable and indexed; only Typst is rendered initially.
+All note directories, including daily notes and literature items, live under `notes/`. The library path still points at the parent directory containing `notes/`; Git metadata, caches, and trash stay at that library root. Only `type` and `document` are required in `meta.json`. The document path is relative to the note directory. Unknown note types remain readable and indexed; only Typst is rendered initially.
 
 ```json
 {
@@ -133,7 +138,7 @@ Explicit `meta.json` fields override derived fields, including empty values, exc
 
 GUI-created notes have minimal metadata and derive their titles from their headings. CLI-created notes have explicit titles and tags; remove those fields from `meta.json` if you want content to own them. Edit metadata externally for now.
 
-Choose **Open today's note** in the command panel or press ⌘⇧D to open or create a normal note whose ID and initial title are today's local date in `YYYY-MM-DD` format, such as `2026-10-30`. The note lives in `2026-10-30/note.typ` with ordinary Typst metadata, and links use `dox:2026-10-30`. The command reuses the note with that date ID even if its heading changes. An already open pane is focused with its draft intact; otherwise the note opens for editing with the cursor at the end of its source. Other open drafts remain intact. Existing notes with random IDs keep those IDs; matching a date title alone does not make them the daily note.
+Choose **Open today's note** in the command panel or press ⌘⇧D to open or create a normal note whose ID and initial title are today's local date in `YYYY-MM-DD` format, such as `2026-10-30`. The note lives in `notes/2026-10-30/note.typ` with ordinary Typst metadata, and links use `dox:2026-10-30`. The command reuses the note with that date ID even if its heading changes. An already open pane is focused with its draft intact; otherwise the note opens for editing with the cursor at the end of its source. Other open drafts remain intact. Existing notes with random IDs keep those IDs; matching a date title alone does not make them the daily note.
 
 Links use `dox:ID`. The compiler resolves links, including computed destinations, for the index. A broken draft remains editable and can retain literal links as a best-effort fallback. Missing targets are retained and reported as dangling-link errors on save/read; malformed `dox:` destinations are reported as invalid-note-link errors. Links emitted through HTML show rules are also checked from compiled HTML. Web links open in the system browser without navigating the note webview. Literature reference details link a `url` field when it is a plain http or https address. Literature items use the same generated IDs as citation keys; see below.
 
@@ -204,7 +209,19 @@ This Fletcher example (which uses CeTZ) has been compiled successfully with Typs
 
 Native filesystem notifications refresh the library, with a one-second polling fallback where native notifications are unavailable. Clean open notes reload automatically; dirty drafts remain intact and show a conflict notice. Saving checks both source and explicit metadata against the loaded revision. This protects ordinary external-edit conflicts; it is not a cross-process locking protocol for simultaneous writes.
 
-Startup shows the cached note tree (or a lightweight source/metadata listing on first use) and refreshes it in the background. Per-note caches track source/metadata revisions, compiler settings, and file stamps from the embedded compiler’s per-compilation snapshot, including imports, packages, and assets. Changing one note does not recompile unrelated notes. Link-target diagnostics are rechecked independently of compilation. Failed compilations are cached until library inputs or compiler settings change. The index computes the library fingerprint once per pass, and per-note locks prevent duplicate concurrent compilation of the same note. Generated HTML and indexes live under `.cache`. Source documents and `meta.json` remain the source of truth. The app adds `/.cache/` and `/.trash/` to the library's `.gitignore`, preserving existing ignore rules. It never initializes or operates Git itself.
+Startup shows the cached note tree (or a lightweight source/metadata listing on first use) and refreshes it in the background. Per-note caches track source/metadata revisions, compiler settings, and file stamps from the embedded compiler’s per-compilation snapshot, including imports, packages, and assets. Changing one note does not recompile unrelated notes. Link-target diagnostics are rechecked independently of compilation. Failed compilations are cached until library inputs or compiler settings change. The index computes the library fingerprint once per pass, and per-note locks prevent duplicate concurrent compilation of the same note. Generated HTML and indexes live under `.cache`. Source documents and `meta.json` remain the source of truth. The app adds `/.cache/` and `/.trash/` to the library's `.gitignore`, preserving existing ignore rules. Git operations are available through the Library changes pane; repository setup remains external.
+
+## Git history and moving between computers
+
+Keep the library at the root of an existing regular Git repository. Install Git and configure your identity, remote upstream branch, and authentication externally. Nested libraries, linked worktrees, submodules, and repositories with tracked `.cache` or `.trash` files require external management. dox preserves existing ignore rules and does not initialize or clone repositories.
+
+Click the Git item beside the library path, or choose **Show library changes** from the command panel. The changes pane is a normal workspace pane: move it, navigate to it, or close it like a note. Reopening focuses the existing pane. Files under `notes/ID/` are grouped by note title where possible; expand a file for a read-only diff of saved files against the last commit, or choose **Open note** to append/focus the note. Binary attachments show their filename and size. Text diffs are capped at 1 MiB.
+
+Save drafts before committing or pulling. **Save all drafts** saves this window's drafts without changing focus and stops on a revision conflict; other windows' drafts are listed and must be saved there. Optionally enter a message and choose **Commit locally** or **Commit and push**; empty commit messages are allowed. The message survives closing/reopening the changes pane within this library session. Commits include all changed nonignored library files; there are no staging controls. Pre-existing staging must be finished or cleared externally. Failed commits preserve staged files; dox permits a retry while its staged index and HEAD are unchanged. After restarting dox, leftover staging must be managed externally. Git hooks and signing configuration remain active.
+
+Remote status is fetched on opening, on app focus (at most once a minute), and every five minutes while a library window is active. Ahead/behind counts describe the locally known upstream state; the **Check for updates** tooltip shows when it was last checked. **Check for updates**, **Pull updates**, and **Push** are explicit actions. Pull requires a clean working tree and updates only when no merge is needed. Resolve divergent histories, existing conflicts, and unfinished Git operations externally; dox never automatically stashes, rebases, merges divergent histories, or force-pushes.
+
+Git operations are coordinated across windows using the same library. Commit and pull pause editing briefly and check every window for drafts before changing repository state. Fetch and push allow editing to continue. A failed upload keeps local commits and offers the ordinary **Push** action for retry. Offline and authentication failures appear in the changes pane; network commands time out after 60 seconds and do not request terminal input. Configure credentials externally if access fails. Closing all windows leaves completed local commits intact.
 
 ## Verify
 
@@ -215,7 +232,7 @@ cd crates/dox-gui
 npm run build
 ```
 
-Existing integration tests still include a legacy external-Typst availability check; application rendering uses the embedded compiler. They cover creation, revision conflicts, merged metadata, computed links, math and SVG output, malformed notes, path containment, and external-change watching. AI, advanced reference management, cross-library links, and dedicated Git operations are deferred as specified in `TARGET.md`.
+Existing integration tests still include a legacy external-Typst availability check; application rendering uses the embedded compiler. They cover creation, revision conflicts, merged metadata, computed links, math and SVG output, malformed notes, path containment, and external-change watching. AI, advanced reference management, cross-library links, and advanced Git operations are deferred as specified in `TARGET.md`.
 
 ## Deletion and diagnostics
 
