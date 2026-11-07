@@ -1,7 +1,47 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    },
+};
 use tauri::{AppHandle, Manager, RunEvent, WebviewWindowBuilder};
 
 static NEXT_WINDOW: AtomicUsize = AtomicUsize::new(1);
+
+#[derive(Default)]
+pub struct ReadyWindows(Mutex<HashSet<String>>);
+
+#[tauri::command]
+pub async fn set_window_theme(
+    window: tauri::WebviewWindow,
+    preference: Option<tauri::Theme>,
+    dark: bool,
+) -> Result<(), String> {
+    // Keep automatic mode tied to the OS rather than pinning its current theme.
+    window
+        .set_theme(preference)
+        .map_err(|error| error.to_string())?;
+    let background = if dark {
+        tauri::utils::config::Color(30, 30, 46, 255)
+    } else {
+        tauri::utils::config::Color(248, 249, 250, 255)
+    };
+    window
+        .set_background_color(Some(background))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn window_ready(
+    window: tauri::WebviewWindow,
+    ready: tauri::State<'_, ReadyWindows>,
+) -> Result<(), String> {
+    // The frontend calls this after rendering and synchronizing its theme.
+    window.show().map_err(|error| error.to_string())?;
+    ready.0.lock().unwrap().insert(window.label().to_owned());
+    window.set_focus().map_err(|error| error.to_string())
+}
 
 fn create_window(app: &AppHandle) -> tauri::Result<()> {
     // Reuse the initial window's appearance and security configuration.
@@ -76,14 +116,29 @@ pub fn handle_event(app: &AppHandle, event: RunEvent) {
             has_visible_windows: false,
             ..
         } => {
-            if let Some(window) = app.webview_windows().into_values().next() {
+            let windows = app.webview_windows();
+            let ready_window = {
+                let ready = app.state::<ReadyWindows>();
+                let ready = ready.0.lock().unwrap();
+                windows.values().find(|window| ready.contains(window.label())).cloned()
+            };
+            if let Some(window) = ready_window {
                 // A minimized or hidden window still exists; reveal it.
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
-            } else if let Err(error) = create_window(app) {
-                eprintln!("Unable to reopen Dox: {error}");
+            } else if windows.is_empty() {
+                if let Err(error) = create_window(app) {
+                    eprintln!("Unable to reopen Dox: {error}");
+                }
             }
+        }
+        RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
+        } => {
+            app.state::<ReadyWindows>().0.lock().unwrap().remove(&label);
         }
         #[cfg(target_os = "macos")]
         RunEvent::MenuEvent(event) if event.id().as_ref() == "new-window" => {

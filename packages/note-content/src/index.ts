@@ -32,8 +32,9 @@ export const baseStyles = `
 :host{display:block;height:100%;min-height:0;overflow:auto;overscroll-behavior-y:none;background:var(--color-document-background);color:var(--color-document-foreground);color-scheme:var(--document-color-scheme,light);contain:layout paint style;outline:none;scrollbar-width:none}
 :host::-webkit-scrollbar{display:none}
 *{overscroll-behavior-y:none}
-.note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:16px/1.5 var(--font-sans);overflow-wrap:break-word;text-wrap:balance}
+.note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:16px/1.5 var(--font-sans);overflow-wrap:break-word;text-wrap:wrap;text-wrap:pretty}
 .note-content :where(:not(math,math *,svg,svg *)){font-family:var(--font-sans)!important}
+h1,h2,h3,h4,h5,h6{text-wrap:balance}
 h1,h2,h3{line-height:1.25;color:var(--color-document-foreground);margin:.65em 0 .35em}
 h1{font-size:24px;letter-spacing:-.3px}h2{font-size:20px}h3{font-size:17px}
 .note-content .note-title{font-size:16px;font-weight:600;line-height:1.3;letter-spacing:normal;margin:0 0 .55em}

@@ -313,6 +313,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_macos_fps::init())
         .manage(Sessions::default())
+        .manage(windows::ReadyWindows::default())
         .manage(git::Coordinator::default())
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -321,6 +322,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             windows::new_window,
+            windows::set_window_theme,
+            windows::window_ready,
             git::git_status,
             git::git_diff,
             git::git_action,
