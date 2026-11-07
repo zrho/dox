@@ -79,6 +79,7 @@ export default function WorkspacePanes<T extends { key: number }>(props: {
               width={paneWidth()}
               left={drag.left(pane.key, index())}
               dragging={drag.draggingKey() === pane.key}
+              trailing={drag.left(pane.key, index()) === (props.panes.length - 1) * paneWidth()}
               active={props.activeKey === pane.key}
               busy={props.busy}
               onActivate={() => props.onActivate(pane.key)}

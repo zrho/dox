@@ -29,7 +29,7 @@ export const noteSanitizeOptions = {
 };
 
 export const baseStyles = `
-:host{display:block;height:100%;min-height:0;overflow:auto;overscroll-behavior-y:none;background:var(--color-document-background);color:var(--color-document-foreground);color-scheme:light;contain:layout paint style;outline:none;scrollbar-width:none}
+:host{display:block;height:100%;min-height:0;overflow:auto;overscroll-behavior-y:none;background:var(--color-document-background);color:var(--color-document-foreground);color-scheme:var(--document-color-scheme,light);contain:layout paint style;outline:none;scrollbar-width:none}
 :host::-webkit-scrollbar{display:none}
 *{overscroll-behavior-y:none}
 .note-content{box-sizing:border-box;margin:0;padding:10px 12px;font:16px/1.5 var(--font-sans);overflow-wrap:break-word;text-wrap:balance}
@@ -57,7 +57,7 @@ dl{margin:.4em 0}dt{margin-top:.3em;font-weight:600}dd{margin:.1em 0 .3em 1.5em}
 
 .note-content a[href]{color:var(--color-document-link);text-decoration:none}pre,code{text-wrap-style:auto}pre{overflow:auto}
 svg,img{max-width:100%;height:auto}blockquote{border-left:2px solid var(--color-document-border-strong);padding-left:12px;margin-left:0}
-/* Adapt Typst's default math foreground for paper; retain other SVG colors. */
+/* Adapt Typst's default math foreground to the document; retain other SVG colors. */
 svg [fill="#cdd6f4"]{fill:var(--color-document-foreground)}
 svg [stroke="#cdd6f4"]{stroke:var(--color-document-foreground)}
 .dox-display-math{display:flex;justify-content:center;margin:1em 0}

@@ -8,6 +8,7 @@ import {
     type UICommand,
 } from "../utils/commands";
 import { titleText } from "../components/features/NoteTitle";
+import { toggleTheme } from "../utils/theme";
 import type { NoteEditorHandle } from "../components/features/NoteEditor";
 import type {
     Note,
@@ -888,6 +889,7 @@ export function createLibrarySession() {
         },
         "find-paper-pdf": findPaperPdf,
         save,
+        "toggle-theme": toggleTheme,
         "toggle-mode": toggleMode,
         edit,
         view,
@@ -913,7 +915,7 @@ export function createLibrarySession() {
         "undo-delete": undoDelete,
     };
     function commandEnabled(id: CommandId) {
-        if (id === "new-window") return true;
+        if (id === "new-window" || id === "toggle-theme") return true;
         if (id === "escape" && (error() || warning())) return true;
         if (id === "zoom-in" || id === "zoom-out" || id === "zoom-reset")
             return !!current();
@@ -984,6 +986,7 @@ export function createLibrarySession() {
         if (
             [
                 "commands",
+                "toggle-theme",
                 "show-git-changes", "git-check", "git-commit", "git-pull", "git-push",
                 "new-window",
                 "import-publication",

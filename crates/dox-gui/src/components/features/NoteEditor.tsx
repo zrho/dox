@@ -41,21 +41,21 @@ const typstLanguage = new Language(
   "typst",
 );
 const highlighting = HighlightStyle.define([
-  { tag: tags.comment, color: "#828e9f" },
-  { tag: [tags.keyword, tags.bool], color: "#8259a8" },
-  { tag: tags.string, color: "#527645" },
-  { tag: tags.number, color: "#95602f" },
-  { tag: [tags.function(tags.variableName), tags.propertyName], color: "#396b91" },
-  { tag: [tags.escape, tags.link, typstTags.interpolated], color: "#397b80" },
-  { tag: [tags.heading, tags.strong, tags.emphasis], color: "#4e607c" },
-  { tag: [tags.punctuation, tags.operator, typstTags.mathDelimiter, typstTags.listMarker], color: "#687080" },
+  { tag: tags.comment, color: "var(--color-syntax-comment)" },
+  { tag: [tags.keyword, tags.bool], color: "var(--color-syntax-keyword)" },
+  { tag: tags.string, color: "var(--color-syntax-string)" },
+  { tag: tags.number, color: "var(--color-syntax-number)" },
+  { tag: [tags.function(tags.variableName), tags.propertyName], color: "var(--color-syntax-function)" },
+  { tag: [tags.escape, tags.link, typstTags.interpolated], color: "var(--color-syntax-escape)" },
+  { tag: [tags.heading, tags.strong, tags.emphasis], color: "var(--color-syntax-heading)" },
+  { tag: [tags.punctuation, tags.operator, typstTags.mathDelimiter, typstTags.listMarker], color: "var(--color-syntax-punctuation)" },
 ]);
 const theme = EditorView.theme({
   "&": {
     height: "100%",
     color: "var(--color-document-foreground)",
     backgroundColor: "var(--color-document-background)",
-    colorScheme: "light",
+    colorScheme: "inherit",
   },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {

@@ -33,7 +33,7 @@
   --color-warning: #eba400;
   --color-warning-surface: color-mix(in srgb, #eba400 12%, #f8f9fa);
   --color-overlay: #6b7d8f;
-  /* Keep document surfaces white and their reading palette independent. */
+  /* Light-mode reading palette. */
   --color-document-background: #ffffff;
   --color-document-foreground: #303446;
   --color-document-muted: #626880;
@@ -45,9 +45,17 @@
   --font-mono: var(--font-sans);
 }
 
-/* Rendered views use this token inside shadow DOM rather than a utility class. */
+/* These tokens are consumed in Shadow DOM and CodeMirror rather than utilities. */
 @theme static {
   --color-document-link: #396b91;
+  --color-syntax-comment: #828e9f;
+  --color-syntax-keyword: #8259a8;
+  --color-syntax-string: #527645;
+  --color-syntax-number: #95602f;
+  --color-syntax-function: #396b91;
+  --color-syntax-escape: #397b80;
+  --color-syntax-heading: #4e607c;
+  --color-syntax-punctuation: #687080;
 }
 
 @layer base {
@@ -55,10 +63,51 @@
     font-family: var(--font-sans);
     font-size: 13px;
     color-scheme: light;
+    --document-color-scheme: light;
     text-wrap: balance;
     font-synthesis: none;
     background: var(--color-background);
     color: var(--color-foreground);
+  }
+  /* Catppuccin Mocha */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --document-color-scheme: dark;
+    --color-background: #1e1e2e;
+    --color-panel: #181825;
+    --color-chrome: #181825;
+    --color-popover: #313244;
+    --color-hover: #45475a80;
+    --color-selection: #45475a;
+    --color-picker-selection: #45475a;
+    --color-border: #313244;
+    --color-border-strong: #585b70;
+    --color-foreground: #cdd6f4;
+    --color-muted: #a6adc8;
+    --color-subtle: #7f849c;
+    --color-accent: #cba6f7;
+    --color-link: #89b4fa;
+    --color-ring: #cba6f7;
+    --color-destructive: #f38ba8;
+    --color-danger-surface: color-mix(in srgb, #f38ba8 12%, #1e1e2e);
+    --color-warning: #f9e2af;
+    --color-warning-surface: color-mix(in srgb, #f9e2af 12%, #1e1e2e);
+    --color-overlay: #11111b;
+    --color-document-background: #1e1e2e;
+    --color-document-foreground: #cdd6f4;
+    --color-document-muted: #a6adc8;
+    --color-document-border: #313244;
+    --color-document-border-strong: #585b70;
+    --color-document-selection: #45475a;
+    --color-document-link: #89b4fa;
+    --color-syntax-comment: #7f849c;
+    --color-syntax-keyword: #cba6f7;
+    --color-syntax-string: #a6e3a1;
+    --color-syntax-number: #fab387;
+    --color-syntax-function: #89b4fa;
+    --color-syntax-escape: #94e2d5;
+    --color-syntax-heading: #b4befe;
+    --color-syntax-punctuation: #9399b2;
   }
   html,
   body,

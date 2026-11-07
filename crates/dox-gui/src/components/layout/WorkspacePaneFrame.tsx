@@ -7,6 +7,7 @@ export default function WorkspacePaneFrame(props: {
   width: number;
   left: number;
   dragging: boolean;
+  trailing: boolean;
   active: boolean;
   busy: boolean;
   onActivate: () => void;
@@ -25,8 +26,9 @@ export default function WorkspacePaneFrame(props: {
       ref={props.bindFrame}
       tabIndex={-1}
       data-workspace-pane-key={props.paneKey}
-      class="absolute top-0 left-0 flex h-full flex-col border-r border-border bg-background outline-none motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+      class="absolute top-0 left-0 flex h-full flex-col border-l border-border bg-background outline-none motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
       classList={{
+        "border-r": props.trailing || props.dragging,
         "z-10": props.dragging,
         "shadow-lg": props.dragging,
         "shadow-overlay/25": props.dragging,

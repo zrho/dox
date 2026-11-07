@@ -180,7 +180,7 @@ export default function NoteView(props: NoteViewProps) {
             <div class="relative h-full w-full overflow-hidden">
                 <div
                     ref={host}
-                    class="h-full w-full bg-document-background text-document-foreground [color-scheme:light]"
+                    class="h-full w-full bg-document-background text-document-foreground"
                     role="region"
                     aria-label="Rendered note"
                     tabIndex={0}

@@ -107,6 +107,9 @@
       "key": "s"
     }
   },
+  "toggle-theme": {
+    "title": "Toggle light/dark mode"
+  },
   "toggle-mode": {
     "title": "Toggle edit/view"
   },
