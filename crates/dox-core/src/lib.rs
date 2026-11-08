@@ -1,6 +1,8 @@
 //! Filesystem libraries shared by the desktop app and CLI.
 mod web_export;
 pub use web_export::{ExportOptions, ExportProgress, ExportReport};
+mod web_deployment;
+pub use web_deployment::WebDeploymentReport;
 mod attachments;
 mod compiler;
 pub use attachments::Attachment;

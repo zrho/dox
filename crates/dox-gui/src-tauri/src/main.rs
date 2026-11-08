@@ -66,33 +66,11 @@ where
     .map_err(error)?
 }
 #[tauri::command]
-fn web_export_destination_exists(destination: String) -> Result<bool, String> {
-    match std::fs::symlink_metadata(destination) {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error.to_string()),
-    }
-}
-#[tauri::command]
-async fn export_web(
-    destination: String,
-    replace: bool,
-    progress: tauri::ipc::Channel<dox_core::ExportProgress>,
+async fn prepare_web_deployment(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
-) -> Result<dox_core::ExportReport, String> {
-    with_library(window, state, move |library| {
-        library.export_web(
-            dox_core::ExportOptions {
-                destination: destination.into(),
-                replace,
-            },
-            |update| {
-                let _ = progress.send(update);
-            },
-        )
-    })
-    .await
+) -> Result<dox_core::WebDeploymentReport, String> {
+    with_library_write(window, state, |library| library.prepare_web_deployment()).await
 }
 #[tauri::command]
 async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<String, String> {
@@ -330,8 +308,7 @@ fn main() {
             git::git_report_drafts,
             git::git_ready,
             fuzzy_find,
-            export_web,
-            web_export_destination_exists,
+            prepare_web_deployment,
             open_library,
             list_notes,
             cached_notes,

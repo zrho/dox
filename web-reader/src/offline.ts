@@ -1,5 +1,6 @@
 import { createSignal, onCleanup } from "solid-js";
 import type { Attachment, Snapshot } from "./types";
+import { assertNotSigningOut, authenticatedFetch, checkAuthentication } from './auth';
 
 const root = new URL('./', location.href);
 const attachmentCache = `dox-reader:${root.pathname}:attachments`;
@@ -82,6 +83,7 @@ export function createOffline(snapshot: () => Snapshot | undefined) {
     if (checking()) return;
     setChecking(true);
     try {
+      await checkAuthentication();
       if (!registration) { await start(); return; }
       setStatus(activeSnapshot() ? 'Available offline · Checking for updates…' : 'Retrying offline download…');
       await registration.update();
@@ -110,11 +112,12 @@ export async function attachmentAvailable(attachment: Attachment) {
 }
 export async function saveAttachment(attachment: Attachment) {
   if (!('caches' in window) || !window.isSecureContext) throw new Error('Offline downloads require HTTPS');
-  const response = await fetch(new URL(attachment.url, root));
+  const response = await authenticatedFetch(new URL(attachment.url, root));
   if (!response.ok || response.redirected) throw new Error('Attachment download failed');
   const digest = await crypto.subtle.digest('SHA-256', await response.clone().arrayBuffer());
   const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
   if (actual !== attachment.hash) throw new Error('Attachment changed; update the library before retrying');
+  assertNotSigningOut();
   await (await caches.open(attachmentCache)).put(new URL(attachment.url, root).href, response);
 }
 export async function removeAttachment(attachment: Attachment) {

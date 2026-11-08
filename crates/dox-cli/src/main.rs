@@ -72,6 +72,8 @@ enum Action {
     Render { id: String },
     /// List notes linking to a given ID.
     Backlinks { id: String },
+    /// Write web/docker-compose.yml; rendering happens during deployment.
+    PrepareWeb,
     /// Export a portable read-only website from saved library content.
     ExportWeb {
         output: PathBuf,
@@ -144,6 +146,7 @@ fn main() -> Result<()> {
                 .filter(|n| n.links.contains(&id))
                 .collect::<Vec<_>>(),
         )?,
+        Action::PrepareWeb => serde_json::to_value(lib.prepare_web_deployment()?)?,
         Action::ExportWeb { output, replace } => serde_json::to_value(lib.export_web(
             dox_core::ExportOptions {
                 destination: output,

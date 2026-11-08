@@ -1,7 +1,7 @@
 import { batch, createMemo, createSignal } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
-import { Channel, invoke } from "@tauri-apps/api/core";
-import { confirm, open, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import {
     commandDefinitions,
     type CommandId,
@@ -799,54 +799,11 @@ export function createLibrarySession() {
             setError(String(error));
         }
     }
-    async function exportWebsite() {
-        if (
-            anyDirty() &&
-            !(await confirm(
-                "The website will include saved files only. Unsaved drafts will stay in the editor. Export saved content?",
-                { title: "Export website", kind: "info" },
-            ))
-        )
-            return;
-        const destination = await saveDialog({
-            title: "Export website directory",
-            defaultPath: `${library()}-website`,
-        });
-        if (!destination) return;
-        const exists = await invoke<boolean>("web_export_destination_exists", {
-            destination,
-        });
-        if (
-            exists &&
-            !(await confirm(
-                "Replace the website at this location? Only a previous dox website export can be replaced.",
-                { title: "Replace website", kind: "warning" },
-            ))
-        )
-            return;
-        const progress = new Channel<{
-            completed: number;
-            total: number;
-            message: string;
-        }>();
-        progress.onmessage = (update) =>
-            setExportStatus(
-                update.total
-                    ? `${update.message} (${update.completed}/${update.total})`
-                    : update.message,
-            );
-        setExportStatus("Exporting website…");
+    async function prepareWebDeployment() {
+        setExportStatus("Preparing web deployment…");
         try {
-            const report = await invoke<{
-                destination: string;
-                notes: number;
-                attachments: number;
-                warnings: string[];
-            }>("export_web", { destination, replace: exists, progress });
-            setExportStatus(
-                `Exported ${report.notes} items and ${report.attachments} attachments to ${report.destination}`,
-            );
-            if (report.warnings.length) setWarning(report.warnings.join("\n"));
+            const report = await invoke<{ destination: string }>("prepare_web_deployment");
+            setExportStatus(`Prepared ${report.destination}. Commit and deploy with Dokploy.`);
         } catch (error) {
             setExportStatus("");
             throw error;
@@ -882,7 +839,7 @@ export function createLibrarySession() {
         "git-pull": () => git.act("pull"),
         "git-push": () => git.act("push"),
         "save-all-drafts": saveAllDrafts,
-        "export-website": exportWebsite,
+        "export-website": prepareWebDeployment,
         "attach-files": async () => {
             const id = current()?.note.id;
             if (id) await attachFiles(id);

@@ -7,15 +7,17 @@ import Download from "lucide-solid/icons/download";
 import LoaderCircle from "lucide-solid/icons/loader-circle";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import X from "lucide-solid/icons/x";
+import LogOut from "lucide-solid/icons/log-out";
 import RichTitle from "./RichTitle";
 import NoteContent from "./NoteContent";
 import { attachmentAvailable, createOffline, removeAttachment, saveAttachment } from "./offline";
+import { authenticatedFetch, authenticationEnabled, signOut, startAuthentication } from "./auth";
 import type { Attachment, Entry, Library, Note, Snapshot } from "./types";
 import './style.css';
 
 const root = new URL('./', location.href);
 async function readJson<T>(url: string | URL): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store' });
+  const response = await authenticatedFetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Could not load library content (${response.status}). Reconnect and try again.`);
   return response.json();
 }
@@ -114,6 +116,7 @@ function App() {
   };
   const pop = () => { restoringHistory = true; };
   onMount(() => {
+    onCleanup(startAuthentication());
     history.scrollRestoration = 'manual';
     window.addEventListener('popstate', pop);
     window.addEventListener('hashchange', route);
@@ -158,6 +161,7 @@ function App() {
     <header class="topbar">
       <Show when={id()}><button class="back icon-button" aria-label="Go back" title="Go back" onClick={() => history.length > 1 ? history.back() : location.assign('#/')}><ArrowLeft size={18} aria-hidden="true" /></button></Show>
       <input ref={searchInput} id="note-search" type="search" aria-label="Search notes" aria-controls="library-sidebar" placeholder="Search notes…" value={query()} onFocus={() => setSidebarOpen(true)} onInput={event => { setQuery(event.currentTarget.value); setSidebarOpen(true); }} />
+      <Show when={authenticationEnabled()}><button class="icon-button" aria-label="Sign out and remove offline copies" title="Sign out and remove offline copies" onClick={() => void signOut().catch(error => setLoadError(String(error)))}><LogOut size={18} aria-hidden="true" /></button></Show>
       <Show when={id() && sidebarOpen()}><button class="close-sidebar icon-button" onClick={() => setSidebarOpen(false)} aria-label="Close note list"><X size={18} aria-hidden="true" /></button></Show>
     </header>
     <Show when={failed()}><div class="app-notice error" role="alert"><p>{failed()}</p><button onClick={retry}>Retry</button></div></Show>

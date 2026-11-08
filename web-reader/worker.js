@@ -5,6 +5,16 @@ const CORE_CACHE = `${NAMESPACE}:snapshot:${SNAPSHOT}`;
 const ATTACHMENT_CACHE = `${NAMESPACE}:attachments`;
 const urls = new Set(RESOURCES.map(resource => new URL(resource.url, ROOT).href));
 const attachments = new Set(ATTACHMENTS.map(path => new URL(path, ROOT).href));
+let signedOut = false;
+const downloads = new AbortController();
+
+async function authorizedFetch(input, options) {
+  const response = await fetch(input, options);
+  if (response.status === 401 && response.headers.get('X-Dox-Auth') === 'required') {
+    await announce({ type: 'auth-required' });
+  }
+  return response;
+}
 
 async function announce(message) {
   const clients = await self.clients.matchAll({ includeUncontrolled: true });
@@ -16,6 +26,7 @@ async function completeSnapshot() {
 }
 let downloading;
 function downloadSnapshot() {
+  if (signedOut) return Promise.reject(new Error('Signed out'));
   if (downloading) return downloading;
   downloading = (async () => {
     if (await completeSnapshot()) { await announce({ type: 'ready' }); return; }
@@ -25,11 +36,12 @@ function downloadSnapshot() {
       for (let start = 0; start < RESOURCES.length; start += 6) {
         const batch = await Promise.allSettled(RESOURCES.slice(start, start + 6).map(async resource => {
           const url = new URL(resource.url, ROOT).href;
-          const response = await fetch(url, { cache: 'reload' });
+          const response = await authorizedFetch(url, { cache: 'reload', signal: downloads.signal });
           if (!response.ok || response.redirected) throw new Error('Snapshot download failed');
           const digest = await crypto.subtle.digest('SHA-256', await response.clone().arrayBuffer());
           const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
           if (actual !== resource.hash) throw new Error('Website changed during download; retry after deployment finishes');
+          if (signedOut) throw new Error('Signed out');
           await cache.put(url, response);
           await announce({ type: 'progress', completed: ++completed, total: RESOURCES.length });
         }));
@@ -60,6 +72,20 @@ self.addEventListener('activate', event => {
   })());
 });
 self.addEventListener('message', event => {
+  if (event.data?.type === 'logout') {
+    signedOut = true;
+    downloads.abort();
+    event.waitUntil((async () => {
+      try { await downloading; } catch { /* A cancelled download is expected. */ }
+      for (const name of await caches.keys()) {
+        if (name.startsWith(`${NAMESPACE}:`)) await caches.delete(name);
+      }
+      await self.registration.unregister();
+      event.ports[0]?.postMessage({ type: 'signed-out' });
+    })());
+    return;
+  }
+  if (signedOut) return;
   if (event.data?.type === 'activate') self.skipWaiting();
   if (event.data?.type === 'repair') event.waitUntil(downloadSnapshot().then(() => announce({ type: 'active' })));
   if (event.data?.type === 'status') event.waitUntil((async () => {
@@ -69,7 +95,7 @@ self.addEventListener('message', event => {
 });
 async function attachmentResponse(request) {
   const cached = await (await caches.open(ATTACHMENT_CACHE)).match(request.url);
-  if (!cached) return fetch(request);
+  if (!cached) return authorizedFetch(request);
   const range = request.headers.get('range');
   if (!range) return cached;
   // PDF viewers commonly request byte ranges, including while offline.
@@ -90,6 +116,7 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== ROOT.origin || !url.pathname.startsWith(ROOT.pathname)) return;
+  if (signedOut) { event.respondWith(authorizedFetch(request)); return; }
   if (attachments.has(url.href)) {
     event.respondWith(attachmentResponse(request));
   } else {
