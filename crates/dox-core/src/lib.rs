@@ -327,7 +327,7 @@ impl Library {
         Ok(path)
     }
     fn fingerprint(&self) -> Result<String> {
-        fn visit(root: &Path, path: &Path, hash: &mut Sha256) -> Result<()> {
+        fn visit(path: &Path, hash: &mut Sha256) -> Result<()> {
             let mut entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
             entries.sort_by_key(|e| e.file_name());
             for entry in entries {
@@ -335,17 +335,10 @@ impl Library {
                 if name == ".cache" || name == ".git" || name == ".trash" {
                     continue;
                 }
-                if entry
-                    .path()
-                    .strip_prefix(root)?
-                    .starts_with(web_deployment::DOX_SUBMODULE)
-                {
-                    continue;
-                }
                 hash.update(name.to_string_lossy().as_bytes());
                 let meta = fs::symlink_metadata(entry.path())?;
                 if meta.is_dir() {
-                    visit(root, &entry.path(), hash)?;
+                    visit(&entry.path(), hash)?;
                 } else {
                     hash.update(meta.len().to_le_bytes());
                     hash.update(format!("{:?}", meta.modified()?));
@@ -356,7 +349,7 @@ impl Library {
         let mut hash = Sha256::new();
         hash.update(b"dox-index-v5-notes-directory");
         hash.update(compiler::VERSION.as_bytes());
-        visit(&self.root, &self.root, &mut hash)?;
+        visit(&self.root, &mut hash)?;
         Ok(format!("{:x}", hash.finalize()))
     }
     pub fn read(&self, id: &str) -> Result<NoteDocument> {
@@ -1211,7 +1204,6 @@ impl Library {
                         !r.starts_with(".cache")
                             && !r.starts_with(".git")
                             && !r.starts_with(".trash")
-                            && !r.starts_with(web_deployment::DOX_SUBMODULE)
                     })
                 }) {
                     on_change();

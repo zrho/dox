@@ -1,5 +1,4 @@
 //! Small Git operations for a library rooted at an existing repository.
-use crate::web_deployment::DOX_SUBMODULE;
 use anyhow::{Context, Result, bail, ensure};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -181,77 +180,6 @@ impl GitRepository {
         let path = self.text(&["rev-parse", "--git-path", "index"])?;
         Ok(Sha256::digest(fs::read(self.root.join(path)).unwrap_or_default()).to_vec())
     }
-    fn check_deployment_submodule(&self, expected: &str, changed: bool) -> Result<()> {
-        const UPDATE: &str =
-            "Run `git submodule update --init --checkout -- web/dox` from the library root";
-        // An uninitialized submodule can appear clean in parent Git status.
-        // Reject symlinks and verify that Git found the submodule itself rather
-        // than falling back to the containing library repository.
-        for directory in [self.root.join("web"), self.root.join(DOX_SUBMODULE)] {
-            ensure!(
-                fs::symlink_metadata(&directory)
-                    .is_ok_and(|metadata| metadata.file_type().is_dir()),
-                "Deployment submodule web/dox is missing or is not a real directory. {UPDATE}"
-            );
-        }
-        ensure!(
-            fs::symlink_metadata(self.root.join(".gitmodules"))
-                .is_ok_and(|metadata| metadata.file_type().is_file()),
-            "Register web/dox in .gitmodules externally before using library Git actions"
-        );
-        let paths = self
-            .checked(&[
-                "config",
-                "--file",
-                ".gitmodules",
-                "--null",
-                "--get-regexp",
-                r"^submodule\..*\.path$",
-            ])
-            .context(
-                "Register web/dox in .gitmodules externally before using library Git actions",
-            )?;
-        // With --null, config emits key\nvalue\0 records, even when a value
-        // contains whitespace. Do not parse Git paths by splitting on spaces.
-        ensure!(
-            paths
-                .split(|byte| *byte == 0)
-                .any(|record| record.splitn(2, |byte| *byte == b'\n').nth(1)
-                    == Some(DOX_SUBMODULE.as_bytes())),
-            "Register web/dox in .gitmodules externally before using library Git actions"
-        );
-        let root = self.root.join(DOX_SUBMODULE).canonicalize()?;
-        let submodule = Self::new(root.clone());
-        let top = submodule
-            .text(&["rev-parse", "--show-toplevel"])
-            .with_context(|| {
-                format!("Deployment submodule web/dox is not initialized. {UPDATE}")
-            })?;
-        ensure!(
-            Path::new(&top).canonicalize()? == root,
-            "Deployment submodule web/dox is not initialized. {UPDATE}"
-        );
-        ensure!(
-            submodule.head() == expected,
-            "Deployment submodule web/dox does not match the recorded revision. {UPDATE}. Commit intentional revision updates externally"
-        );
-        let changes = submodule.checked(&[
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--ignore-submodules=none",
-        ])?;
-        ensure!(
-            changes.is_empty(),
-            "Deployment submodule web/dox has local changes. Commit or discard those edits externally before using library Git actions"
-        );
-        ensure!(
-            !changed,
-            "The deployment submodule reference has changed. Finish or clear that change externally before using library Git actions"
-        );
-        Ok(())
-    }
     pub fn status(&self) -> Result<GitStatus> {
         let top = match self.run(&["rev-parse", "--show-toplevel"], 64 * 1024) {
             Ok(output) if output.success => String::from_utf8(output.stdout)?,
@@ -293,7 +221,6 @@ impl GitRepository {
             "--porcelain=v1",
             "-z",
             "--untracked-files=all",
-            "--ignore-submodules=none",
         ])?;
         for entry in bytes.split(|b| *b == 0).filter(|p| !p.is_empty()) {
             ensure!(entry.len() >= 4, "Invalid Git status record");
@@ -352,48 +279,29 @@ impl GitRepository {
         } else {
             None
         };
+        if status.changes.iter().any(|change| {
+            self.root.join(&change.path).is_dir()
+                && self.root.join(&change.path).join(".git").exists()
+        }) {
+            status.blocked = Some("Nested repositories must be managed externally.".into());
+        }
         let tracked = self.checked(&["ls-files", "--stage", "-z"])?;
-        let mut deployment_revision = None;
         for entry in tracked.split(|b| *b == 0) {
+            if entry.starts_with(b"160000 ") {
+                status.blocked =
+                    Some("Repositories containing submodules must be managed externally.".into());
+            }
             if let Some(tab) = entry.iter().position(|b| *b == b'\t') {
                 let path = &entry[tab + 1..];
-                if entry.starts_with(b"160000 ") {
-                    let fields: Vec<_> = entry[..tab].split(|byte| *byte == b' ').collect();
-                    if path == DOX_SUBMODULE.as_bytes() && fields.len() == 3 && fields[2] == b"0" {
-                        deployment_revision = Some(std::str::from_utf8(fields[1])?.to_owned());
-                    } else {
-                        status.blocked.get_or_insert_with(||
-                            "Submodules other than a clean deployment submodule at web/dox must be managed externally.".into());
-                    }
-                }
                 if path.starts_with(b".cache/") || path.starts_with(b".trash/") {
                     status.blocked = Some("Generated .cache or .trash files are tracked. Untrack them externally before using Git in dox.".into());
                 }
             }
         }
-        if let Some(expected) = &deployment_revision {
-            let changed = status
-                .changes
-                .iter()
-                .any(|change| change.path == DOX_SUBMODULE);
-            if let Err(error) = self.check_deployment_submodule(expected, changed) {
-                status.blocked.get_or_insert_with(|| format!("{error:#}"));
-            }
-        }
-        if status.changes.iter().any(|change| {
-            !(change.path == DOX_SUBMODULE && deployment_revision.is_some())
-                && self.root.join(&change.path).is_dir()
-                && self.root.join(&change.path).join(".git").exists()
-        }) {
-            status
-                .blocked
-                .get_or_insert_with(|| "Nested repositories must be managed externally.".into());
-        }
         let mut fingerprint = Sha256::new();
         fingerprint.update(&bytes);
         fingerprint.update(self.head());
         fingerprint.update(self.index_fingerprint()?);
-        fingerprint.update(status.blocked.as_deref().unwrap_or_default());
         for change in &status.changes {
             if let Ok(meta) = fs::symlink_metadata(self.root.join(&change.path)) {
                 fingerprint.update(meta.len().to_le_bytes());
@@ -463,17 +371,12 @@ impl GitRepository {
             "Local and remote histories have diverged. Resolve them in an external Git tool."
         );
         self.checked(&[
-            "-c",
-            "submodule.recurse=false",
             "merge",
             "--ff-only",
             "--no-autostash",
             "--no-edit",
             "@{upstream}",
         ])?;
-        if let Some(problem) = self.status()?.blocked {
-            bail!("Library updated, but further Git changes are blocked: {problem}");
-        }
         Ok(())
     }
     pub fn push(&self) -> Result<()> {

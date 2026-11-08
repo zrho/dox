@@ -15,91 +15,60 @@ Commit the Compose file and saved library content to the library's private Git
 repository. Dokploy deploys the committed files; unsaved drafts and uncommitted
 local changes are not part of that checkout.
 
-## One-time submodule setup
-
-From the library's Git repository root, add dox as a submodule:
-
-```sh
-git submodule add https://github.com/zrho/dox.git web/dox
-git add .gitmodules web/dox web/docker-compose.yml
-git commit -m 'Prepare dox web deployment'
-```
-
-Use external Git credentials with access to the private dox repository. Preparation
-only writes Compose: it does not initialize, fetch, update, or stage a submodule.
-The library records a specific dox commit; deploying notes does not advance it.
-For an existing library checkout, initialize the recorded version with:
-
-```sh
-git submodule update --init --checkout -- web/dox
-```
-
-The pinned dox revision must contain the CLI, checked-in reader bundle, and
-`web-server/server.mjs`. Push changes to dox before updating the library's pin.
-
 ## Dokploy setup
 
 1. Create a **Docker Compose** service using the library repository as its Git
    source. Use Compose, rather than Docker Stack. The builder needs Docker
-   Compose 2.17+ and BuildKit with local named build contexts.
-2. Set the Compose path to `web/docker-compose.yml` and enable submodule checkout
-   (`enableSubmodules`). Configure Dokploy's checkout credentials to read both
-   the library and `https://github.com/zrho/dox.git`; access to the library alone
-   is insufficient for a private submodule. Authentication is handled during
-   checkout, before Docker starts.
+   Compose 2.17+ for inline Dockerfiles, and BuildKit.
+2. Set the Compose path to `web/docker-compose.yml`. Dokploy needs access to
+   the library repository. Docker clones the public
+   `https://github.com/zrho/dox.git` repository during the image build.
 3. In Dokploy's Environment panel set:
    ```dotenv
    DOX_WEB_PASSWORD='replace this with a strong shared password'
    ```
-   Keep credentials out of the library repository. Quote values according to
+   Keep the password out of the library repository. Quote values according to
    Compose's `.env` rules, especially when they contain dollar signs. The website
-   password is passed only to the running server. `DOX_GITHUB_TOKEN` is no longer
-   used by Compose and can be removed from the deployment settings.
+   password is passed only to the running server.
 4. Add an **HTTPS domain** for service `web`, container port **3000**, path `/`.
    Dokploy handles Traefik routing and certificates; no host port is published.
-5. Deploy. Dokploy checks out the submodule revision recorded in the library.
-   Docker's `dox` context is the local `web/dox` directory: there is no Git clone
-   or GitHub token inside the image build. An absent or uninitialized submodule
-   prevents the build from finding its source files. The first build compiles
-   dox's Rust CLI. Internet access is still needed for base images, Cargo,
+5. Deploy. Docker clones dox and compiles the Rust CLI, then exports the library.
+   The deployment needs internet access for GitHub, base images, Cargo,
    system packages, and uncached Typst packages used by the library.
 
 ## Updating dox and reusing the compiler
 
-To update dox, run these commands externally from the library root:
+Rebuild/redeploy in Dokploy to obtain the latest dox default branch. The inline
+Dockerfile uses `ADD https://github.com/zrho/dox.git /src/`, Docker's native Git
+clone instruction. BuildKit resolves the Git source during the build and can
+reuse the compiler layer when its content is unchanged. Changes to dox must be
+pushed upstream before they can be used by a deployment.
+
+The compiler stage contains dox source only. Note files enter the later rendering
+stage, so a note-only deployment reuses the CLI compiler layer on the same
+builder with its cache retained and unchanged dox source. A new dox version or
+build recipe can rerun Cargo; the Cargo registry and target caches reuse unchanged
+dependencies. Cache eviction, a changed toolchain/base image, another builder,
+or a cache-disabled build can also require compilation. Upstream dox updates
+can change rendering behavior even when the notes are unchanged.
+
+## Migrating from the submodule setup
+
+Run **Prepare web deployment** again to regenerate Compose. If the library still
+tracks the old `web/dox` submodule, preserve any edits inside it, then remove it
+externally from the library root:
 
 ```sh
-git submodule update --remote --checkout -- web/dox
-git diff --submodule=log -- web/dox
-# Review the revision, then record it in the library:
-git add web/dox
-git commit -m 'Update dox web deployment version'
+git rm web/dox
+git add web/docker-compose.yml
+git commit -m 'Fetch dox during the Docker build'
+git push
 ```
 
-Preserve any local changes in the submodule before updating. The `--remote`
-command explicitly advances to dox's default branch; ordinary submodule checkout
-and Dokploy deployments use the recorded commit. Updating dox can change
-rendering behavior. Push the library commit to deploy the new version.
-
-The compiler stage copies only dox's build inputs, excluding checkout metadata
-and the parent library. Note files enter the later rendering stage. A note-only
-deployment therefore reuses the CLI compiler layer on the same builder with its
-cache retained. Changes to dox build inputs or the build recipe can rerun Cargo;
-the Cargo registry and target caches are retained to reuse unchanged dependencies.
-Cache eviction, a changed toolchain/base image, another builder, or a cache-disabled
-build can require compilation again, even with the same pinned revision.
-
-The built-in library Git actions allow a registered `web/dox` submodule when its
-checkout is clean and matches the recorded revision. Missing checkouts, local
-edits, reference changes, other submodules, and unrelated nested repositories
-require external management. Submodule files do not contribute to the library's
-content fingerprint or trigger note refreshes; the Git pane still checks local
-status every five seconds while the window is focused and on app focus.
-
-Library fetch, pull, and push never recurse into submodules. If a pull changes
-the recorded dox revision, the library fast-forwards but further Git mutations
-are blocked until the checkout matches it. Run the initialization command above
-externally; dox does not fetch or reset submodule contents on your behalf.
+Git also updates `.gitmodules` when removing the submodule. Turn off **Enable
+Submodules** in Dokploy and remove any old `DOX_GITHUB_TOKEN` setting. The only
+application environment variable required by this deployment is
+`DOX_WEB_PASSWORD`.
 
 ## Updates and access
 
@@ -141,18 +110,12 @@ development agent under this project's current workflow.
 
 - Prepare a new deployment and prepare it again: only the generated Compose
   file changes. Unrelated files and symlink destinations are refused.
-- Add and commit `web/dox` externally, enable Dokploy submodule checkout, and
-  deploy with checkout credentials covering both private repositories. Confirm
-  Docker uses the recorded revision and renders the committed notes.
-- Change only a note and redeploy on the same cached builder. Confirm the Cargo
-  build step is cached while the export step reruns.
-- Update and commit the dox submodule reference. Confirm checkout uses that
-  revision and changed compiler inputs rebuild before rendering the library.
-- Confirm normal library Git actions work with a clean deployment submodule.
-  Missing, dirty, or mismatched checkouts and other submodules remain blocked.
-- Pull a library commit that changes the dox reference. Confirm the library
-  updates and shows the external checkout command, then resumes normal Git
-  actions once the submodule matches. Submodule source edits do not refresh notes.
+- Deploy a private library with only its repository credentials and the website
+  password. Confirm Docker clones public dox over HTTPS and renders the notes.
+- Change only a note and redeploy on the same cached builder with unchanged
+  upstream dox source. Confirm the Cargo step is cached and the export reruns.
+- Push an upstream dox change and rebuild. Confirm Docker obtains the update and
+  rebuilds the compiler when its inputs change.
 - Make a rendering error and confirm the build fails rather than publishing an
   incomplete snapshot. Correct it and redeploy a changed library.
 - In a fresh browser, request the home page, note JSON, images, attachments, and
