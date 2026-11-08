@@ -63,9 +63,17 @@ Choose **Prepare web deployment** in the desktop command panel, or run:
 dox --library ~/Notes prepare-web
 ```
 
-This generates only `<library>/web/docker-compose.yml`. Commit it with the library to its private Git repository, then configure Dokploy to deploy that repository using Compose path `web/docker-compose.yml`. Nothing is rendered locally. The Compose file contains an inline Dockerfile: Docker fetches the latest default branch of `https://github.com/zrho/dox`, builds the CLI, and renders the committed library during the image build. The final image contains the rendered website and a small password server, with no Rust toolchain or library sources.
+This generates only `<library>/web/docker-compose.yml`. Add dox as a submodule once, using external Git from the library root:
 
-Set `DOX_WEB_PASSWORD` and a read-only GitHub token for dox as `DOX_GITHUB_TOKEN` in Dokploy's Environment panel. Compose passes the token to BuildKit as an environment-backed secret; the website password is supplied only at runtime. Add an HTTPS domain for service `web`, container port **3000**, at path `/`. The server refuses to start without a nonblank password. See [deployment setup and acceptance checklist](web-server/README.md) for credential provisioning, prerequisites, updates, and offline access details. The new dox code must be pushed upstream before using the generated deployment.
+```sh
+git submodule add https://github.com/zrho/dox.git web/dox
+git add .gitmodules web/dox web/docker-compose.yml
+git commit -m 'Prepare dox web deployment'
+```
+
+Commit and push the library to its private Git repository. In Dokploy, enable submodule checkout and use Compose path `web/docker-compose.yml`. Its checkout credentials must read both the library and dox repositories. Nothing is rendered locally. Docker builds the CLI from the pinned `web/dox` checkout, then renders the committed library during the image build. The final image contains the rendered website and a small password server, with no Rust toolchain or library sources. Note-only deployments reuse the compiler layer while the builder retains its cache; a new dox revision is an explicit library change rather than an automatic default-branch update.
+
+Set `DOX_WEB_PASSWORD` in Dokploy's Environment panel and add an HTTPS domain for service `web`, container port **3000**, at path `/`. The server refuses to start without a nonblank password. Compose no longer uses `DOX_GITHUB_TOKEN`: dox is obtained during the submodule checkout before Docker starts. See [deployment setup and acceptance checklist](web-server/README.md) for checkout credentials, version updates, cache behavior, and offline access details. Pin a dox revision containing the deployment code and reader bundle.
 
 Rebuild/redeploy to publish new committed content. Rendering errors fail the image build. Password changes require recreating the container, without rendering again; server restarts invalidate all sessions. Authentication protects the reader, note data, images, attachments, and service worker. **Sign out and remove offline copies** clears the current browser's reader storage and returns open reader tabs to login. Previously downloaded content on other devices remains readable offline after password rotation.
 
@@ -112,8 +120,10 @@ Notes/
     XYZ89/                 # literature item
       meta.json
       reference.bib
+  .gitmodules              # optional deployment submodule registration
   web/
     docker-compose.yml     # generated deployment recipe, committed with the library
+    dox/                   # optional pinned dox submodule for deployment
   .cache/                  # disposable HTML and metadata indexes
   .trash/                  # deleted note directories
 ```
@@ -225,7 +235,7 @@ Startup shows the cached note tree (or a lightweight source/metadata listing on 
 
 ## Git history and moving between computers
 
-Keep the library at the root of an existing regular Git repository. Install Git and configure your identity, remote upstream branch, and authentication externally. Nested libraries, linked worktrees, submodules, and repositories with tracked `.cache` or `.trash` files require external management. dox preserves existing ignore rules and does not initialize or clone repositories.
+Keep the library at the root of an existing regular Git repository. Install Git and configure your identity, remote upstream branch, and authentication externally. Nested libraries, linked worktrees, other submodules, and repositories with tracked `.cache` or `.trash` files require external management. The deployment submodule at `web/dox` permits normal library Git actions when it is registered, checked out at its recorded revision, and clean; setup, edits, and revision changes remain external. Pull does not update its checkout: when a pulled commit changes the pin, run `git submodule update --init --checkout -- web/dox` externally before further Git mutations. dox preserves existing ignore rules and does not initialize or clone repositories.
 
 Click the Git item beside the library path, or choose **Show library changes** from the command panel. The changes pane is a normal workspace pane: move it, navigate to it, or close it like a note. Reopening focuses the existing pane. Files under `notes/ID/` are grouped by note title where possible; expand a file for a read-only diff of saved files against the last commit, or choose **Open note** to append/focus the note. Binary attachments show their filename and size. Text diffs are capped at 1 MiB.
 
