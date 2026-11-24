@@ -29,7 +29,6 @@ export default function LibraryPage() {
       mainRef={app.bindMain}
       status={
         <>
-          <Show when={app.exportStatus()}><span class="min-w-0 truncate" title={app.exportStatus()}>{app.exportStatus()}</span></Show>
           <Show when={app.library()}>
             {(path) => {
               const parts = splitLibraryPath(path());

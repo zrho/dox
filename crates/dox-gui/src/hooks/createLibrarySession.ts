@@ -212,7 +212,6 @@ export function createLibrarySession() {
         busy: localBusy,
     });
     const busy = () => localBusy() || git.frozen();
-    const [exportStatus, setExportStatus] = createSignal("");
     const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
     const [pickerOpen, setPickerOpen] = createSignal(false);
     const [pickerMode, setPickerMode] = createSignal<NotePickerMode>("open");
@@ -799,16 +798,6 @@ export function createLibrarySession() {
             setError(String(error));
         }
     }
-    async function prepareWebDeployment() {
-        setExportStatus("Preparing web deployment…");
-        try {
-            const report = await invoke<{ destination: string }>("prepare_web_deployment");
-            setExportStatus(`Prepared ${report.destination}. Commit and deploy with Dokploy.`);
-        } catch (error) {
-            setExportStatus("");
-            throw error;
-        }
-    }
     const commandHandlers: Record<CommandId, () => void | Promise<void>> = {
         commands: () => {
             setCommandPanelOpen(true);
@@ -839,7 +828,6 @@ export function createLibrarySession() {
         "git-pull": () => git.act("pull"),
         "git-push": () => git.act("push"),
         "save-all-drafts": saveAllDrafts,
-        "export-website": prepareWebDeployment,
         "attach-files": async () => {
             const id = current()?.note.id;
             if (id) await attachFiles(id);
@@ -894,7 +882,6 @@ export function createLibrarySession() {
             case "new-literature":
             case "import-publication":
             case "import-bibtex":
-            case "export-website":
                 return !!library();
             case "undo-delete":
                 return !!lastDeleted();
@@ -1063,7 +1050,6 @@ export function createLibrarySession() {
         warning,
         lastDeleted,
         busy,
-        exportStatus,
         external,
         commandPanelOpen,
         publicationImportOpen,

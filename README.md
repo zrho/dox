@@ -55,46 +55,6 @@ cargo run -p dox-cli -- --library ~/Notes watch
 
 Replace `ABC12` with an actual generated ID. `show` returns source, merged metadata, and a revision. `save ABC12 --revision REVISION` reads source from stdin and refuses to overwrite a changed revision. Structured commands emit JSON; `render` emits HTML. `list` also accepts `--search`.
 
-## Web deployment
-
-Choose **Prepare web deployment** in the desktop command panel, or run:
-
-```sh
-dox --library ~/Notes prepare-web
-```
-
-This generates only `<library>/web/docker-compose.yml`. Commit it with the library to its private Git repository, then configure Dokploy to deploy that repository using Compose path `web/docker-compose.yml`. Nothing is rendered locally. The inline Dockerfile clones the public `https://github.com/zrho/dox` repository over HTTPS, builds the CLI, and renders the committed library during the image build. The final image contains the rendered website and a small password server, with no Rust toolchain or library sources. Note-only deployments reuse the compiler layer while the dox source is unchanged and the builder retains its cache.
-
-Set `DOX_WEB_PASSWORD` in Dokploy's Environment panel and add an HTTPS domain for service `web`, container port **3000**, at path `/`. The server refuses to start without a nonblank password. See [deployment setup and acceptance checklist](web-server/README.md) for setup, updates, cache behavior, and offline access details.
-
-Rebuild/redeploy to publish new committed content. Rendering errors fail the image build. Password changes require recreating the container, without rendering again; server restarts invalidate all sessions. Authentication protects the reader, note data, images, attachments, and service worker. **Sign out and remove offline copies** clears the current browser's reader storage and returns open reader tabs to login. Previously downloaded content on other devices remains readable offline after password rotation.
-
-The CLI also retains the underlying static export command used by Docker:
-
-```sh
-dox --library ~/Notes export-web ~/Notes-website
-# Replace a previous static export:
-dox --library ~/Notes export-web ~/Notes-website --replace
-```
-
-Its output parent must exist and the destination must be outside the library. Only directories bearing a valid `.dox-export.json` marker can be replaced. Export stages content before replacement, uses saved files, stops on rendering errors or library changes, and warns about missing link targets. A raw static export has no authentication server; use the Compose deployment for password protection.
-
-The reader is a separate Solid app built for phones and tablets, with a single reading area and a searchable library sidebar. On phones the library takes the full screen until a note is opened; on tablets and computers the sidebar stays visible beside the note. Search matches words in titles, tags, and IDs. Links, citations, backlinks, rich titles, math, and literature remain available. Browser Back/Forward navigates between notes. **⌘K / Ctrl-K** opens search. Note sources, local filesystem diagnostics, `.cache`, and `.trash` are excluded; supported attachments are copied into the website.
-
-On HTTPS (or localhost), the reader automatically downloads all rendered notes, required images, and its own application assets. Wait for **Available offline** in the library panel before disconnecting. A web app manifest supports installation through the browser's install or Add to Home Screen action. Attachments are available online; use the download icon beside an attachment to keep it offline. Its checkmark icon removes only that browser's downloaded copy. The refresh icon beside the offline status checks for updates. Browser storage limits or eviction can affect offline availability; failures are shown with a retry action. Ordinary Typst images are embedded; library-local raw HTML images are packaged. External image dependencies, responsive image sources, and URL-based CSS resources stop export rather than creating incomplete offline notes.
-
-To update the deployed website, commit the library changes and rebuild/redeploy in Dokploy. The reader downloads and verifies the complete new snapshot before showing **Open updated library**. Activating it reloads open reader tabs. Failed update downloads retain the previous offline snapshot; unchanged downloaded attachments carry forward. Exports are read-only snapshots, with no editing or synchronization back to the desktop library.
-
-The reader has its own dependencies, navigation, styles, and state in `web-reader/`. Only the content preparation helpers and Typst content styles in `packages/note-content/` are shared with the desktop viewer. Its prebuilt `web-reader/dist/` bundle is checked into the repository and embedded by Rust, so ordinary Rust builds and website exports need no Node installation. After changing reader code or shared content helpers, regenerate that bundle before rebuilding Rust:
-
-```sh
-cd web-reader
-npm ci
-npm run build
-```
-
-From `crates/dox-gui`, `npm run build:web` also regenerates the reader bundle once its dependencies are installed. The desktop frontend still builds separately. The export worker template lives in `web-reader/worker.js` and receives its resource list and hashes during export.
-
 ## Library format
 
 ```text
@@ -112,8 +72,6 @@ Notes/
     XYZ89/                 # literature item
       meta.json
       reference.bib
-  web/
-    docker-compose.yml     # generated deployment recipe, committed with the library
   .cache/                  # disposable HTML and metadata indexes
   .trash/                  # deleted note directories
 ```

@@ -92,9 +92,6 @@
   "open-library": {
     "title": "Open library"
   },
-  "export-website": {
-    "title": "Prepare web deployment"
-  },
   "attach-files": {
     "title": "Attach files to item"
   },

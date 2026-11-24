@@ -66,13 +66,6 @@ where
     .map_err(error)?
 }
 #[tauri::command]
-async fn prepare_web_deployment(
-    window: tauri::WebviewWindow,
-    state: State<'_, Sessions>,
-) -> Result<dox_core::WebDeploymentReport, String> {
-    with_library_write(window, state, |library| library.prepare_web_deployment()).await
-}
-#[tauri::command]
 async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         git::switching_allowed(window.app_handle(), window.label())?;
@@ -308,7 +301,6 @@ fn main() {
             git::git_report_drafts,
             git::git_ready,
             fuzzy_find,
-            prepare_web_deployment,
             open_library,
             list_notes,
             cached_notes,
