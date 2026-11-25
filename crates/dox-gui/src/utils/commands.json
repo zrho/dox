@@ -166,10 +166,7 @@
   "undo-delete": {
     "title": "Undo last note deletion"
   },
-  "show-git-changes": { "title": "Show library changes" },
-  "git-check": { "title": "Check for Git updates" },
-  "git-commit": { "title": "Commit library changes" },
-  "git-pull": { "title": "Pull updates" },
-  "git-push": { "title": "Push" },
+  "git-sync": { "title": "Sync now" },
+  "git-auto-sync": { "title": "Enable automatic sync" },
   "save-all-drafts": { "title": "Save all drafts" }
 }

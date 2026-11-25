@@ -1,7 +1,6 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal } from "solid-js";
 import WorkspacePanes from "../layout/WorkspacePanes";
 import NotePaneContent from "./NotePaneContent";
-import GitChangesPaneContent from "./GitChangesPaneContent";
 import { titleText } from "./NoteTitle";
 import { createAttachmentDrop } from "../../hooks/createAttachmentDrop";
 import type { LibrarySession } from "../../hooks/createLibrarySession";
@@ -31,10 +30,7 @@ export default function LibraryWorkspace(props: { app: LibrarySession }) {
     onError: app.reportError,
   });
   function paneLabel(pane: WorkspacePane) {
-    if (isNotePane(pane)) {
-      return `${titleText(pane.document.note)}${app.notePaneDirty(pane) ? " (unsaved)" : ""}`;
-    }
-    return "Library changes";
+    return `${titleText(pane.document.note)}${app.notePaneDirty(pane) ? " (unsaved)" : ""}`;
   }
   return (
     <WorkspacePanes
@@ -51,25 +47,21 @@ export default function LibraryWorkspace(props: { app: LibrarySession }) {
       onInteractionChange={setInteracting}
     >
       {(pane) => (
-        <Show when={isNotePane(pane) ? pane : undefined} fallback={<GitChangesPaneContent app={app} />}>
-          {(notePane) => (
             <NotePaneContent
-              pane={notePane()}
+              pane={pane}
               active={app.activeKey() === pane.key}
               busy={app.busy()}
               dropTarget={fileDrop.target() === pane.key}
               notes={app.index().notes}
-              onAttach={() => app.attachFiles(notePane().document.note.id)}
-              onOpenAttachment={(name) => app.openAttachment(notePane().document.note.id, name)}
-              onRemoveAttachment={(name) => app.removeAttachment(notePane().document.note.id, name)}
+              onAttach={() => app.attachFiles(pane.document.note.id)}
+              onOpenAttachment={(name) => app.openAttachment(pane.document.note.id, name)}
+              onRemoveAttachment={(name) => app.removeAttachment(pane.document.note.id, name)}
               onNavigate={(id) => app.openLinked(id, pane.key)}
               onSourceChange={(source) => app.setNoteSource(pane.key, source)}
               getNoteTitle={app.getNoteTitle}
               editorRef={(element) => app.bindEditor(pane.key, element)}
               onDispose={() => app.unbindEditor(pane.key)}
             />
-          )}
-        </Show>
       )}
     </WorkspacePanes>
   );

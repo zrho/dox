@@ -1,0 +1,13 @@
+{
+  "name": "dox NSH",
+  "id": "app.dox.nsh",
+  "version": "0.1.0",
+  "build": 1,
+  "icon": "icon.png",
+  "rust": ".",
+  "capabilities": {
+    "application": true,
+    "webview": {},
+    "openUrl": { "schemes": ["http", "https"] }
+  }
+}

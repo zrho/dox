@@ -44,7 +44,7 @@ where
     .await
     .map_err(error)?
 }
-// Serialize library mutations against commit and pull in every window.
+// Serialize library mutations against each other and Git operations in every window.
 async fn with_library_write<T, E>(
     window: tauri::WebviewWindow,
     state: State<'_, Sessions>,
@@ -59,7 +59,8 @@ where
         .state::<git::Coordinator>()
         .repository(library.root());
     tauri::async_runtime::spawn_blocking(move || {
-        let _write = repo.writes.read().map_err(error)?;
+        let _write = repo.writes.write().map_err(error)?;
+        let _disk = git::lock_disk(library.root())?;
         action(library).map_err(|error| format!("{error:#}"))
     })
     .await
@@ -72,7 +73,9 @@ async fn open_library(path: String, window: tauri::WebviewWindow) -> Result<Stri
         std::fs::create_dir_all(&path).map_err(error)?;
         let root_path = std::fs::canonicalize(&path).map_err(error)?;
         let repo = window.state::<git::Coordinator>().repository(&root_path);
-        let _write = repo.writes.read().map_err(error)?;
+        let _write = repo.writes.write().map_err(error)?;
+        git::joining_allowed(&repo)?;
+        let _disk = git::lock_disk(&root_path)?;
         let lib = Library::init(root_path).map_err(error)?;
         let handle = window.clone();
         let watcher = lib

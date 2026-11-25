@@ -41,10 +41,11 @@ export default function LibraryPage() {
             }}
           </Show>
           <Show when={app.library()}>
-            <button type="button" class="shrink-0 text-muted hover:text-foreground" onClick={app.showGitChanges}
-              title="Show library changes">
+            <span role="status" tabindex="0" class="shrink-0 text-muted"
+              classList={{ "text-warning": !!app.git.problem() }}
+              title={app.git.statusDetail()} aria-label={app.git.statusDetail()}>
               {app.git.statusLabel()}
-            </button>
+            </span>
           </Show>
         </>
       }
@@ -85,6 +86,13 @@ export default function LibraryPage() {
             {app.error()}
           </pre>
         </Alert>
+      </Show>
+      <Show when={app.git.problem()}>
+        {(problem) => (
+          <Alert variant="warning">
+            <p class="m-0 whitespace-pre-wrap">Sync needs attention: {problem()}</p>
+          </Alert>
+        )}
       </Show>
       <Show when={app.warning()}>
         <Alert variant="warning" onDismiss={app.dismissWarning}>

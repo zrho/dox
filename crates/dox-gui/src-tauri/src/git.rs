@@ -45,6 +45,8 @@ pub struct Repository {
     attempted: Mutex<Option<Instant>>,
     ready: Mutex<Option<Ready>>,
     wake: Condvar,
+    // (worker active, another automatic sync requested)
+    sync_queue: Mutex<(bool, bool)>,
 }
 #[derive(Default)]
 pub struct Coordinator {
@@ -74,10 +76,39 @@ impl Coordinator {
                     attempted: Mutex::new(None),
                     ready: Mutex::new(None),
                     wake: Condvar::new(),
+                    sync_queue: Mutex::new((false, false)),
                 })
             })
             .clone()
     }
+}
+/// All dox processes use this lock for file mutations. A crash leaves the
+/// marker in place: recovery must preserve files before removing a stale lock.
+pub struct DiskWriteGuard(Option<PathBuf>);
+impl Drop for DiskWriteGuard {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+pub fn lock_disk(root: &Path) -> Result<DiskWriteGuard, String> {
+    if !root.join(".git").is_dir() {
+        return Ok(DiskWriteGuard(None));
+    }
+    if root.join(".git/dox-sync-journal").exists() {
+        return Err("An interrupted sync requires external recovery before writing. Preserve the library and inspect .git/dox-sync-journal.".into());
+    }
+    let path = root.join(".git/dox-write.lock");
+    std::fs::OpenOptions::new().write(true).create_new(true).open(&path)
+        .map_err(|e| format!("Cannot lock library writes: {e}. Another dox process may be writing. After a crash, preserve files and inspect .git/dox-sync-journal before removing .git/dox-write.lock."))?;
+    Ok(DiskWriteGuard(Some(path)))
+}
+pub fn joining_allowed(repo: &Repository) -> Result<(), String> {
+    if repo.ready.lock().unwrap().is_some() {
+        return Err("Wait for sync before opening this library in another window".into());
+    }
+    Ok(())
 }
 fn windows(app: &tauri::AppHandle, root: &Path) -> Vec<String> {
     app.state::<Sessions>()
@@ -257,13 +288,17 @@ fn freeze<'a>(
     for label in &labels {
         let _ = app.emit_to(label, "git-prepare", event.clone());
     }
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // Saving can compile several notes. Keep the token alive while those
+    // writes finish; a late acknowledgement must never start a transaction.
+    let deadline = Instant::now() + Duration::from_secs(60);
     let mut pending = repo.ready.lock().unwrap();
     loop {
         let replies = &pending.as_ref().unwrap().replies;
         for (label, reply) in replies {
             if let Some(Err(problem)) = reply {
-                return Err(format!("{label}: {problem}"));
+                let problem = format!("{label}: {problem}");
+                drop(pending);
+                return Err(problem);
             }
         }
         if replies.values().all(Option::is_some) {
@@ -282,6 +317,55 @@ fn freeze<'a>(
     drop(pending);
     Ok(guard)
 }
+fn sync_transaction(
+    app: &tauri::AppHandle,
+    root: &Path,
+    repo: &Repository,
+    action: impl FnOnce() -> Result<String, String>,
+) -> Result<String, String> {
+    let frozen = freeze(app, root, repo)?;
+    let _write = repo.writes.write().unwrap();
+    let _disk = lock_disk(root)?;
+    let mut current = windows(app, root);
+    let mut prepared = frozen.labels.clone();
+    current.sort();
+    prepared.sort();
+    if current != prepared {
+        return Err("Library windows changed during preparation; retry sync".into());
+    }
+    action()
+}
+// Save and checkpoint before network work, including when offline.
+// Network work holds neither the editor freeze nor the write gate.
+fn sync_once(
+    app: &tauri::AppHandle,
+    root: &Path,
+    repo: &Repository,
+    git: &mut GitRepository,
+) -> Result<String, String> {
+    sync_transaction(app, root, repo, || {
+        git.checkpoint().map_err(|e| format!("{e:#}"))
+    })?;
+    for attempt in 0..3 {
+        git.fetch()
+            .map_err(|e| format!("Saved locally; sync pending. {e:#}"))?;
+        repo.snapshot.lock().unwrap().checked_at = Some(now());
+        let oid = sync_transaction(app, root, repo, || {
+            git.reconcile_fetched().map_err(|e| format!("{e:#}"))
+        });
+        // A failed reconciliation can still leave a local checkpoint on disk.
+        emit(app, root, "library-changed", ());
+        let oid = oid?;
+        match git.push_commit(&oid) {
+            Ok(()) => return Ok(oid),
+            Err(error) if attempt < 2 && GitRepository::is_push_race(&error) => {
+                std::thread::sleep(Duration::from_millis(250 * (1 << attempt)));
+            }
+            Err(error) => return Err(format!("Saved locally; sync pending. {error:#}")),
+        }
+    }
+    unreachable!()
+}
 #[tauri::command]
 pub async fn git_action(
     root: String,
@@ -291,17 +375,73 @@ pub async fn git_action(
     window: tauri::WebviewWindow,
 ) -> Result<Snapshot, String> {
     let root = root_for(&window, &root)?;
-    if !["fetch", "commit", "commit-push", "pull", "push"].contains(&action.as_str()) {
+    if !["fetch", "commit", "commit-push", "pull", "push", "sync"].contains(&action.as_str()) {
         return Err("Unknown Git action".into());
     }
-    if automatic && action != "fetch" {
-        return Err("Only remote checks can run automatically".into());
+    if automatic && action != "fetch" && action != "sync" {
+        return Err("Only remote checks and sync can run automatically".into());
     }
     let repo = window.state::<Coordinator>().repository(&root);
     let app = window.app_handle().clone();
+    if automatic && action == "sync" {
+        {
+            let mut queue = repo.sync_queue.lock().unwrap();
+            queue.1 = true;
+            if queue.0 {
+                drop(queue);
+                return Ok(publish(&app, &root, &repo));
+            }
+            queue.0 = true;
+        }
+        return tauri::async_runtime::spawn_blocking(move || {
+            loop {
+                repo.sync_queue.lock().unwrap().1 = false;
+                // Wait on a worker thread rather than lose the trigger when Git is busy.
+                let mut git = repo.git.lock().unwrap();
+                repo.snapshot.lock().unwrap().operation = Some("sync".into());
+                publish(&app, &root, &repo);
+                let outcome = sync_once(&app, &root, &repo, &mut git);
+                refresh(&repo, &git);
+                {
+                    let mut state = repo.snapshot.lock().unwrap();
+                    state.operation = None;
+                    state.remote_error = outcome.as_ref().err().cloned();
+                    state.result = Some(GitResult {
+                        action: "sync".into(),
+                        success: outcome.is_ok(),
+                        commit: outcome.as_ref().ok().cloned(),
+                        message: match &outcome {
+                            Ok(_) => "Library synced".into(),
+                            Err(error) => error.clone(),
+                        },
+                    });
+                }
+                let snapshot = publish(&app, &root, &repo);
+                drop(git);
+                let mut queue = repo.sync_queue.lock().unwrap();
+                if outcome.is_err() || !queue.1 {
+                    // Do not retry errors merely because saves queued during prepare.
+                    *queue = (false, false);
+                    return snapshot;
+                }
+            }
+        })
+        .await
+        .map_err(|e| e.to_string());
+    }
     tauri::async_runtime::spawn_blocking(move || {
-        let mut git = repo.git.lock().unwrap();
-        if automatic {
+        // Automatic requests must not queue behind another operation. The active
+        // operation publishes its result to every window for this library.
+        let mut git = if automatic {
+            match repo.git.try_lock() {
+                Ok(git) => git,
+                Err(std::sync::TryLockError::WouldBlock) => return publish(&app, &root, &repo),
+                Err(std::sync::TryLockError::Poisoned(error)) => panic!("{error}"),
+            }
+        } else {
+            repo.git.lock().unwrap()
+        };
+        if automatic && action == "fetch" {
             if repo
                 .attempted
                 .lock()
@@ -323,23 +463,41 @@ pub async fn git_action(
         repo.snapshot.lock().unwrap().operation = Some(action.clone());
         publish(&app, &root, &repo);
         let mut committed = None;
+        let mut sync_message = None;
         let outcome: Result<(), String> = (|| {
-            // Wait for writes already in progress before asking editors to freeze.
-            let _write = if changes_disk {
-                Some(repo.writes.write().unwrap())
-            } else {
-                None
-            };
+            // Editors must finish their prepare saves before we block writes.
             let _freeze = if changes_disk {
                 Some(freeze(&app, &root, &repo)?)
             } else {
                 None
             };
+            let _write = if changes_disk {
+                Some(repo.writes.write().unwrap())
+            } else {
+                None
+            };
+            let _disk = if changes_disk {
+                Some(lock_disk(&root)?)
+            } else {
+                None
+            };
+            if let Some(frozen) = &_freeze {
+                let mut current = windows(&app, &root);
+                let mut prepared = frozen.labels.clone();
+                current.sort();
+                prepared.sort();
+                if current != prepared {
+                    return Err("Library windows changed during preparation; retry sync".into());
+                }
+            }
             if action.starts_with("commit") {
                 committed = Some(
                     git.commit(message.as_deref().unwrap_or(""))
                         .map_err(|e| format!("{e:#}"))?,
                 );
+            } else if action == "sync" {
+                committed = Some(sync_once(&app, &root, &repo, &mut git)?);
+                sync_message = Some("Library synced".to_string());
             } else if action == "pull" {
                 *repo.attempted.lock().unwrap() = Some(Instant::now());
                 git.pull().map_err(|e| format!("{e:#}"))?;
@@ -366,34 +524,33 @@ pub async fn git_action(
         {
             let mut snapshot = repo.snapshot.lock().unwrap();
             snapshot.operation = None;
-            if action == "fetch" || action == "pull" {
+            if action == "fetch" || action == "pull" || action == "sync" {
                 snapshot.remote_error = outcome.as_ref().err().cloned();
             }
-            if !automatic {
-                let message = match &outcome {
-                    Ok(()) => match action.as_str() {
-                        "commit" => "Committed locally",
-                        "commit-push" => "Committed and pushed",
-                        "pull" => "Library updated",
-                        "push" => "Pushed successfully",
-                        _ => "Remote status updated",
-                    }
-                    .into(),
-                    Err(e) if committed.is_some() => format!(
-                        "Committed locally; push failed. {e} Retry Push to upload this commit."
-                    ),
-                    Err(e) => e.clone(),
-                };
-                snapshot.result = Some(GitResult {
-                    action: action.clone(),
-                    success: outcome.is_ok(),
-                    commit: committed,
-                    message,
-                });
-            }
+            let message = match &outcome {
+                Ok(()) => match action.as_str() {
+                    "commit" => "Committed locally",
+                    "commit-push" => "Committed and pushed",
+                    "pull" => "Library updated",
+                    "push" => "Pushed successfully",
+                    "sync" => sync_message.as_deref().unwrap_or("Library synced"),
+                    _ => "Remote status updated",
+                }
+                .into(),
+                Err(e) if committed.is_some() => {
+                    format!("Committed locally; push failed. {e} Retry Push to upload this commit.")
+                }
+                Err(e) => e.clone(),
+            };
+            snapshot.result = Some(GitResult {
+                action: action.clone(),
+                success: outcome.is_ok(),
+                commit: committed,
+                message,
+            });
         }
         let snapshot = publish(&app, &root, &repo);
-        if action == "pull" {
+        if action == "pull" || action == "sync" {
             emit(&app, &root, "library-changed", ());
         }
         snapshot

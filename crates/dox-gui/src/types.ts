@@ -71,11 +71,7 @@ export type NotePane = WorkspacePaneBase & {
   viewZoom: number;
 };
 
-// Add new content variants here as the workspace gains other views.
-export type GitChangesPane = WorkspacePaneBase & {
-  kind: "git-changes";
-};
-export type WorkspacePane = NotePane | GitChangesPane;
+export type WorkspacePane = NotePane;
 export function isNotePane(pane: WorkspacePane): pane is NotePane {
   return pane.kind === "note";
 }
@@ -100,7 +96,7 @@ export type GitStatus = {
   blocked: string | null;
   retry_commit: boolean;
 };
-export type GitAction = "fetch" | "commit" | "commit-push" | "pull" | "push";
+export type GitAction = "sync" | "fetch" | "commit" | "commit-push" | "pull" | "push";
 export type GitSnapshot = {
   root: string;
   revision: number;
@@ -110,10 +106,4 @@ export type GitSnapshot = {
   remote_error: string | null;
   drafts: { window: string; titles: string[] }[];
   result: { action: GitAction; success: boolean; commit: string | null; message: string } | null;
-};
-export type GitDiff = {
-  text: string;
-  binary: boolean;
-  truncated: boolean;
-  size: number | null;
 };

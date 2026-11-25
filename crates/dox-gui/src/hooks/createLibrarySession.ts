@@ -69,10 +69,13 @@ export function createLibrarySession() {
         const pane = activeNotePane();
         return pane ? editors.get(pane.key) : undefined;
     };
+    const sourceGenerations = new Map<number, number>();
+    const [editActivity, setEditActivity] = createSignal(0);
     function updateNotePane(
         key: number,
         patch: Partial<Omit<NotePane, "key" | "kind">>,
     ) {
+        if (patch.source !== undefined) sourceGenerations.set(key, (sourceGenerations.get(key) ?? 0) + 1);
         setWorkspace(
             "panes",
             (pane) => pane.key === key && isNotePane(pane),
@@ -84,7 +87,15 @@ export function createLibrarySession() {
         if (key !== undefined) updateNotePane(key, patch);
     }
     const setCurrent = (document: Document) => updateActiveNote({ document });
-    const setSource = (source: string) => updateActiveNote({ source });
+    function changeSource(key: number, source: string) {
+        if (git.frozen()) return;
+        setEditActivity((value) => value + 1);
+        updateNotePane(key, { source });
+    }
+    const setSource = (source: string) => {
+        const key = activeNotePane()?.key;
+        if (key !== undefined) changeSource(key, source);
+    };
     const setMode = (mode: "view" | "edit") => updateActiveNote({ mode });
     const setHtml = (html: string) => updateActiveNote({ html });
     const setExternal = (external: boolean) => updateActiveNote({ external });
@@ -116,11 +127,6 @@ export function createLibrarySession() {
             },
             prefix,
         );
-    }
-    function showGitChanges() {
-        const existing = panes().find((pane) => pane.kind === "git-changes");
-        if (existing) revealPane(existing.key);
-        else addPane({ key: ++nextPaneKey, kind: "git-changes" });
     }
     function focusActive() {
         const pane = activePane();
@@ -210,6 +216,21 @@ export function createLibrarySession() {
         library,
         draftTitles: () => notePanes().filter(notePaneDirty).map((pane) => titleText(pane.document.note)),
         busy: localBusy,
+        editorSource: editActivity,
+        prepare: async (valid) => {
+            for (const pane of notePanes().filter(notePaneDirty)) {
+                if (pane.external || pane.document.note.diagnostic)
+                    throw new Error(`Cannot sync “${titleText(pane.document.note)}”: resolve the stale or invalid draft first.`);
+            }
+            for (const pane of notePanes().filter(notePaneDirty)) {
+                if (!valid()) throw new Error("Git preparation expired. Try sync again.");
+                await saveNotePane(pane.key);
+                const saved = notePanes().find((candidate) => candidate.key === pane.key);
+                if (saved?.document.note.diagnostic) throw new Error("Cannot sync an invalid draft. Your editor source is retained.");
+            }
+            if (notePanes().some((pane) => pane.document.note.diagnostic || pane.external))
+                throw new Error("Cannot sync: resolve invalid or stale notes first. Your editor source is retained.");
+        },
     });
     const busy = () => localBusy() || git.frozen();
     const [commandPanelOpen, setCommandPanelOpen] = createSignal(false);
@@ -237,6 +258,7 @@ export function createLibrarySession() {
               scrollTop: number;
           }
         | undefined;
+    let libraryGeneration = 0;
     let request = 0;
     let indexRequest = 0;
     async function run(action: () => Promise<void>) {
@@ -292,6 +314,7 @@ export function createLibrarySession() {
         if (token === indexRequest && root === library()) setIndex(result);
     }
     async function openLibrary(path: string) {
+        ++libraryGeneration;
         ++indexRequest;
         const root = await invoke<string>("open_library", { path });
         ++request;
@@ -388,14 +411,24 @@ export function createLibrarySession() {
         const pane = notePanes().find((pane) => pane.key === key);
         if (!pane) return;
         const root = library();
+        const generation = libraryGeneration;
+        const capturedSource = pane.source;
+        const sourceGeneration = sourceGenerations.get(key) ?? 0;
+        const id = pane.document.note.id;
+        const revision = pane.document.note.revision;
         ++indexRequest;
         const doc = await invoke<Document>("save_note", {
-            id: pane.document.note.id,
-            source: pane.source,
-            revision: pane.document.note.revision,
+            id, source: capturedSource, revision,
         });
-        if (library() !== root) return;
-        updateNotePane(key, { document: doc, source: doc.source, external: false });
+        if (library() !== root || generation !== libraryGeneration) return;
+        const live = notePanes().find((candidate) => candidate.key === key);
+        if (!live || live.document.note.id !== id || live.document.note.revision !== revision) return;
+        // Advance the saved baseline, but never replace a newer editor draft.
+        updateNotePane(key, {
+            document: doc,
+            ...((sourceGenerations.get(key) ?? 0) === sourceGeneration && live.source === capturedSource && !doc.note.diagnostic ? { source: doc.source } : {}),
+            external: false,
+        });
         // Show save-time diagnostics immediately, even before the library refresh finishes.
         setIndex((previous) => ({
             ...previous,
@@ -822,11 +855,8 @@ export function createLibrarySession() {
         },
         "import-bibtex": importBibtex,
         "open-library": chooseLibrary,
-        "show-git-changes": showGitChanges,
-        "git-check": () => git.act("fetch"),
-        "git-commit": () => { showGitChanges(); return git.act("commit"); },
-        "git-pull": () => git.act("pull"),
-        "git-push": () => git.act("push"),
+        "git-sync": () => git.sync(),
+        "git-auto-sync": () => git.setAutomaticSync(!git.automatic()),
         "save-all-drafts": saveAllDrafts,
         "attach-files": async () => {
             const id = current()?.note.id;
@@ -869,13 +899,10 @@ export function createLibrarySession() {
             case "commands":
             case "open-library":
                 return true;
-            case "git-check":
+            case "git-sync":
+            case "git-auto-sync":
                 return !!library() && !!git.snapshot()?.status.available && !git.operation();
-            case "git-commit": return git.canCommit();
-            case "git-pull": return git.canPull();
-            case "git-push": return git.canPush();
             case "save-all-drafts": return anyDirty();
-            case "show-git-changes":
             case "find":
             case "new-note":
             case "daily-note":
@@ -918,6 +945,9 @@ export function createLibrarySession() {
     const commands = createMemo<UICommand[]>(() =>
         commandDefinitions.map((command) => ({
             ...command,
+            title: command.id === "git-auto-sync"
+                ? (git.automatic() ? "Disable automatic sync" : "Enable automatic sync")
+                : command.title,
             enabled: commandEnabled(command.id),
         })),
     );
@@ -931,7 +961,7 @@ export function createLibrarySession() {
             [
                 "commands",
                 "toggle-theme",
-                "show-git-changes", "git-check", "git-commit", "git-pull", "git-push",
+                "git-sync", "git-auto-sync",
                 "new-window",
                 "import-publication",
                 "find",
@@ -1019,10 +1049,6 @@ export function createLibrarySession() {
         library,
         index,
         git,
-        showGitChanges,
-        saveAllDrafts: () => { void run(saveAllDrafts); },
-        hasDrafts: anyDirty,
-        openWorkspaceNote: (id: string) => { void run(() => openItem(id)); },
         panes,
         activeKey,
         paneReveal,
@@ -1070,7 +1096,7 @@ export function createLibrarySession() {
             void run(() => openLinked(id, fromKey));
         },
         setNoteSource: (key: number, source: string) => {
-            if (!git.frozen()) updateNotePane(key, { source });
+            changeSource(key, source);
         },
         openNote: (id: string) => {
             void run(() => load(id));
