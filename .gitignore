@@ -4,5 +4,3 @@
 **/.cache/
 .DS_Store
 /.nsh
-**/src-tauri/gen/
-**/src-tauri/icons/generated/

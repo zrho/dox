@@ -10,7 +10,7 @@
   - Rust native backend, with shared functionality in the `dox-core` library crate.
   - Embed the Typst compiler through `typst-as-lib`, with HTML export, standard fonts, local imports, and Typst Universe packages. Compile in process rather than launching an external executable. Keep compilation and package downloads off the desktop UI and async runtime threads.
   - `dox-cli` exposes core functionality through a CLI.
-  - `dox-gui` provides a Tauri app with a TypeScript and SolidJS frontend.
+  - `dox-nsh` provides the macOS desktop app with Native Shell.
   - Future AI functionality lives in `dox-core` and is exposed through both CLI and GUI; behavior will be specified later.
 
 - Library and storage

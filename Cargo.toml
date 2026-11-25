@@ -1,6 +1,5 @@
 [workspace]
-members = ["crates/dox-core", "crates/dox-cli", "crates/dox-gui/src-tauri"]
-default-members = ["crates/dox-core", "crates/dox-cli"]
+members = ["crates/dox-core", "crates/dox-cli"]
 resolver = "2"
 
 [workspace.package]

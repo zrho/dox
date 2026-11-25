@@ -1,6 +1,6 @@
 # Dox for macOS (Native Shell)
 
-Dox is a macOS app for reading and editing dox libraries. Native Shell provides the AppKit workspace. The Tauri GUI is a separate app.
+Dox is a macOS app for reading and editing dox libraries. Native Shell provides the AppKit workspace.
 
 ## Build and install locally
 
@@ -25,6 +25,8 @@ Press ⌘N for a new note, ⌘⇧D for today’s note, or ⌘K in a Typst draft 
 Use **Attach files to item** or drop local files onto a note pane to copy files into it. The attachment panel opens files in the system’s default app and can remove the library’s copy. Use **Find and attach paper PDF** on a literature pane to find an arXiv PDF.
 
 **Sync now** saves drafts in all windows for that library, then syncs its Git repository. Configure the repository, upstream, identity, and authentication outside dox. **Enable automatic sync** is off by default and is remembered for each library. When enabled, the app waits at least ten minutes after opening the library, enabling the option, or editing a draft. While the library stays idle, it attempts to sync no more than once every five minutes. **Disable automatic sync** stops future attempts.
+
+An interrupted sync can leave `.git/dox-sync-journal` and retained commits under `refs/dox/retained/`. A crash can also leave `.git/dox-write.lock`, which blocks writes. Preserve the working tree and examine the journal before you remove either file. Dox does not recover these files automatically.
 
 The app follows the system appearance with Ayu Light and Ayu Dark. In the command panel, choose **Theme: Switch to dark mode** or **Theme: Switch to light mode** to override it, or **Theme: Follow system appearance** to clear the override.
 

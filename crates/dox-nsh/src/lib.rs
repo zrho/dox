@@ -249,7 +249,7 @@ fn mark_changed(version: &AtomicU64) {
     });
 }
 
-// Match the Tauri write lock. Do not remove a lock left by a crashed process.
+// Do not remove a write lock left by a crashed process.
 struct DiskWriteGuard(PathBuf);
 
 impl Drop for DiskWriteGuard {

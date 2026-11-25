@@ -1,0 +1,41 @@
+[config]
+skip_core_tasks = true
+default_to_workspace = false
+
+[tasks.default]
+alias = "build"
+
+[tasks.build]
+description = "Build the Rust workspace (core and CLI)."
+command = "cargo"
+args = ["build", "--workspace"]
+
+[tasks.cli]
+description = "Run the CLI with the supplied arguments."
+command = "cargo"
+args = ["run", "-p", "dox-cli", "--", "${@}"]
+
+[tasks.install-cli]
+description = "Install the CLI from this checkout."
+command = "cargo"
+args = ["install", "--path", "crates/dox-cli"]
+
+[tasks.dev]
+description = "Run the macOS app with hot reload."
+command = "nsh"
+args = ["run", "crates/dox-nsh", "--target", "macos"]
+
+[tasks.package]
+description = "Build the macOS app bundle in target/dox-nsh-macos."
+command = "nsh"
+args = ["package", "crates/dox-nsh", "--target", "macos", "--out", "target/dox-nsh-macos"]
+
+[tasks.fmt]
+description = "Format the Rust workspace."
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.lint]
+description = "Run Clippy on the Rust workspace."
+command = "cargo"
+args = ["clippy", "--workspace"]
