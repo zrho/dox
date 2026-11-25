@@ -3,12 +3,14 @@ import { Button } from "nsh/base";
 import type { ListRef } from "nsh/types";
 import { DialogSurface } from "../design/DialogSurface";
 import { Icon, type ItemIcon } from "../design/Icon";
+import { NoteTitle, type TitleSpan } from "../design/NoteTitle";
 import { SearchField } from "../design/SearchField";
 import { createPickerSearch } from "./pickerSearch";
 
 export type PickerItem = {
   id: string;
   title: string;
+  titleSpans?: readonly TitleSpan[];
   /** Optional trailing text, such as a note ID or a shortcut label. */
   detail?: string;
   icon?: ItemIcon;
@@ -131,7 +133,7 @@ export function Picker(props: PickerProps) {
               onPress={() => choose(item())}
             >
               <If when={item().icon}>{(icon) => <Icon name={icon()} />}</If>
-              <Text class="flex-1 text-sm text-foreground line-clamp-1" style={{ minWidth: 0 }}>{item().title}</Text>
+              <NoteTitle title={item().title} spans={item().titleSpans} class="min-w-0 flex-1 text-sm text-foreground line-clamp-1" />
               {!!item().detail && (
                 <Text class="text-xs text-muted-foreground line-clamp-1" style={{ maxWidth: "40%" }}>{item().detail}</Text>
               )}

@@ -5,7 +5,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 const START: &str = r#"<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-j7UKH1N4J6yFplKLZrW5NPnX8rLnQ9jNOVQfbpjo7og='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-d0FDn9Buou+NoK59Vfttt+GJb6nSK0YMKWlilwU1C0o='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <title>Note preview</title><style>"#;
 
 const FONT_FACES: [(&str, &[u8]); 2] = [
@@ -64,12 +64,100 @@ const BOOTSTRAP: &str = r###"(() => {
     const plainPaint = /^(?:[A-Za-z]+|#[0-9a-f]{3,8}|(?:rgba?|hsla?)\([0-9.,%+ /-]+\))$/i;
     // These sources are used only in image elements, never as documents or links.
     const imageData = /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/i;
+    const noteTarget = /^dox:(?:[0-9A-Z]{5}|[0-9]{4}-[0-9]{2}-[0-9]{2})$/;
     const targets = new WeakMap();
     const root = document.getElementById('preview').attachShadow({ mode: 'closed' });
     const article = document.createElement('article');
     const stylesheet = document.getElementById('preview-style');
-    root.append(stylesheet.content, article);
+    const tooltip = document.createElement('div');
+    tooltip.setAttribute('data-preview-tooltip', '');
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.hidden = true;
+    root.append(stylesheet.content, article, tooltip);
     stylesheet.remove();
+
+    let active = false;
+    let hoveredLink;
+    let focusedLink;
+    let tooltipLink;
+    let requestedId = '';
+    let linkTitle = '';
+    let previousLabel;
+    let tooltipTimer;
+    let tooltipDismissed = false;
+
+    function internalLink(node) {
+        const link = node instanceof Element ? node.closest('a') : null;
+        return link instanceof HTMLAnchorElement && noteTarget.test(targets.get(link) ?? '') ? link : undefined;
+    }
+    function dismissTooltip() {
+        clearTimeout(tooltipTimer);
+        tooltip.hidden = true;
+    }
+    function clearTooltip() {
+        dismissTooltip();
+        if (previousLabel === null) tooltipLink.removeAttribute('aria-label');
+        else if (previousLabel !== undefined) tooltipLink.setAttribute('aria-label', previousLabel);
+        previousLabel = undefined;
+    }
+    function placeTooltip() {
+        if (tooltip.hidden || !tooltipLink?.isConnected) return;
+        const rect = tooltipLink.getBoundingClientRect();
+        const width = tooltip.offsetWidth;
+        const height = tooltip.offsetHeight;
+        tooltip.style.visibility = rect.bottom <= 0 || rect.top >= window.innerHeight ||
+            rect.right <= 0 || rect.left >= window.innerWidth ? 'hidden' : '';
+        tooltip.style.left = Math.max(8, Math.min(rect.left + (rect.width - width) / 2,
+            window.innerWidth - width - 8)) + 'px';
+        tooltip.style.top = Math.max(8, rect.top >= height + 16 ? rect.top - height - 8 :
+            Math.min(rect.bottom + 8, window.innerHeight - height - 8)) + 'px';
+    }
+    function scheduleTooltip() {
+        if (!tooltipLink || !linkTitle) return;
+        previousLabel = tooltipLink.getAttribute('aria-label');
+        tooltipLink.setAttribute('aria-label', tooltipLink.textContent.trim() + ': ' + linkTitle);
+        tooltip.textContent = linkTitle;
+        if (tooltipDismissed) return;
+        tooltipTimer = setTimeout(() => {
+            tooltip.hidden = false;
+            placeTooltip();
+        }, 300);
+    }
+    function updateTooltipLink() {
+        const link = active ? hoveredLink ?? focusedLink : undefined;
+        if (link === tooltipLink) return;
+        clearTooltip();
+        tooltipLink = link;
+        tooltipDismissed = false;
+        const id = link ? targets.get(link).slice(4) : '';
+        if (id === requestedId) {
+            scheduleTooltip();
+        } else {
+            requestedId = id;
+            linkTitle = '';
+            window.nsh?.postMessage('tooltip:' + id);
+        }
+    }
+    function trackLink(type, track, related = false) {
+        root.addEventListener(type, event => {
+            if (!event.isTrusted) return;
+            track(internalLink(related ? event.relatedTarget : event.target));
+            updateTooltipLink();
+        });
+    }
+    trackLink('mouseover', link => { hoveredLink = link; });
+    trackLink('mouseout', link => { hoveredLink = link; }, true);
+    trackLink('focusin', link => { focusedLink = link; });
+    trackLink('focusout', link => { focusedLink = link; }, true);
+    window.addEventListener('scroll', placeTooltip, true);
+    window.addEventListener('resize', placeTooltip);
+    window.addEventListener('keydown', event => {
+        if (event.isTrusted && event.key === 'Escape') {
+            tooltipDismissed = true;
+            dismissTooltip();
+        }
+    });
+
     const svgRefs = words('use textPath linearGradient radialGradient pattern');
     function copy(node, parent) {
         if (node.nodeType === 3) {
@@ -98,6 +186,10 @@ const BOOTSTRAP: &str = r###"(() => {
                 if (!/\\|url\s*\(|image-set\s*\(|attr\s*\(|var\s*\(/i.test(value)) {
                     out.style.setProperty(property, value);
                 }
+            }
+            // Typst SVG frames can paint descenders and subscripts outside the viewBox.
+            if (ns === svg && tag === 'svg' && node.style.getPropertyValue('overflow') === 'visible') {
+                out.style.setProperty('overflow', 'visible');
             }
         }
 
@@ -136,6 +228,8 @@ const BOOTSTRAP: &str = r###"(() => {
         for (const row of content.querySelectorAll('.literature-fields tr')) {
             if (row.querySelector('th[scope="row"]')?.textContent.trim() === 'Title') row.remove();
         }
+        hoveredLink = focusedLink = undefined;
+        updateTooltipLink();
         article.replaceChildren(content);
         window.scrollTo(0, 0);
     }
@@ -152,7 +246,7 @@ const BOOTSTRAP: &str = r###"(() => {
                 const id = decodeURIComponent(target.slice(1));
                 (id ? root.getElementById(id) : article)?.scrollIntoView({ block: 'start' });
             } catch { /* Ignore a malformed fragment. */ }
-        } else if (/^dox:(?:[0-9A-Z]{5}|[0-9]{4}-[0-9]{2}-[0-9]{2})$/.test(target)) {
+        } else if (noteTarget.test(target)) {
             window.nsh?.postMessage('note:' + target.slice(4));
         } else if (/^https?:\/\//i.test(target) && target.length <= 16384) {
             window.nsh?.postMessage('external:' + target);
@@ -185,6 +279,26 @@ const BOOTSTRAP: &str = r###"(() => {
             const data = JSON.parse(event.data);
             if (data?.type === 'set-theme') {
                 if (data.theme === 'light' || data.theme === 'dark') root.host.dataset.theme = data.theme;
+                return;
+            }
+            if (data?.type === 'set-active' && typeof data.active === 'boolean') {
+                active = data.active;
+                updateTooltipLink();
+                return;
+            }
+            if (data?.type === 'set-zoom') {
+                if (Number.isInteger(data.zoom) && data.zoom >= 50 && data.zoom <= 250) {
+                    article.style.zoom = String(data.zoom / 90);
+                    placeTooltip();
+                }
+                return;
+            }
+            if (data?.type === 'set-link-title') {
+                if (tooltipLink && data.id === requestedId && typeof data.title === 'string' && data.title !== linkTitle) {
+                    clearTooltip();
+                    linkTitle = data.title;
+                    scheduleTooltip();
+                }
                 return;
             }
             if (data?.type !== 'render-note' || typeof data.html !== 'string' || typeof data.title !== 'string') return;

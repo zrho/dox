@@ -89,6 +89,22 @@ li > ul, li > ol { margin-block: .15em 0; }
     text-transform: uppercase;
 }
 
+[data-preview-tooltip] {
+    position: fixed;
+    z-index: 100;
+    box-sizing: border-box;
+    max-width: min(360px, calc(100vw - 16px));
+    padding: 6px 9px;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--stripe);
+    color: var(--ink);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+    font: 12px/1.4 system-ui, sans-serif;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+}
+
 pre { overflow: auto; }
 a[role=link] { color: var(--link); cursor: pointer; text-decoration: none !important; }
 a[role=link]:focus-visible { outline: 1px solid var(--link); outline-offset: 2px; }

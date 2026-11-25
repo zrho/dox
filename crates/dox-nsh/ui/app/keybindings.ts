@@ -1,18 +1,25 @@
 import { cleanup, effect, keymap } from "nsh";
+import { PANE_ZOOM_STEP } from "../workspace/paneState";
 import type { Session } from "./createSession";
 
-export function bindKeybindings(session: Session) {
+export function bindKeybindings(session: Session, newWindow: () => void) {
   const {
     overlay, openLibrary, path, busy, report, createNote, chooseLink, findNotes, confirming,
     operation, activeKey, libraryError, activePane, toggleEdit, closePane, savePane,
-    editorFocused, deleteNote, focusNeighbor, movePane,
+    editorFocused, deleteNote, focusNeighbor, movePane, zoomPane,
   } = session;
 
   cleanup(keymap.bind({
     "mod+o": () => { if (!overlay()) void openLibrary(); },
+    "mod+shift+n": () => { if (!overlay()) void report(async () => newWindow()); },
     "mod+n": () => { if (path() && !busy() && !overlay()) void report(() => createNote("note")); },
     "mod+shift+d": () => { if (path() && !busy() && !overlay()) void report(() => createNote("daily")); },
     "mod+k": () => { if (!overlay()) chooseLink(); },
+    "mod+minus": () => { if (!overlay()) zoomPane(-PANE_ZOOM_STEP); },
+    "mod+plus": () => { if (!overlay()) zoomPane(PANE_ZOOM_STEP); },
+    "mod+shift+plus": () => { if (!overlay()) zoomPane(PANE_ZOOM_STEP); },
+    "mod+0": () => { if (!overlay()) zoomPane("reset"); },
+    "mod+shift+k": () => { if (!overlay()) chooseLink(true); },
     "mod+p": () => { if (overlay() === "notes") overlay.set(null); else if (!overlay()) findNotes(); },
     "mod+shift+p": () => { if (overlay() === "commands") overlay.set(null); else if (!overlay()) overlay.set("commands"); },
   }, { when: "always" }));

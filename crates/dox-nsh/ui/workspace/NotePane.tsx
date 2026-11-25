@@ -16,6 +16,7 @@ export function NotePane(props: {
   onActivate: () => void;
   onNavigate: (id: string) => void;
   onHorizontalScroll: (delta: number) => void;
+  onDragReorder: (delta: number) => void;
   onEdit: () => void;
   onDraft: (source: string) => void;
   onEditorFocus: (focused: boolean) => void;
@@ -24,7 +25,9 @@ export function NotePane(props: {
   const frame = signal<ViewRef>();
   const idle = () => props.pane.id === "";
   const draggingFiles = signal(false);
+  const draggingPane = signal(false);
   const acceptsDrop = () => !!props.pane.note && !props.actions.busy;
+  const getNoteTitle = (id: string) => props.entries.find((entry) => entry.id === id)?.title;
 
   effect(() => {
     if (!props.active) return;
@@ -53,10 +56,18 @@ export function NotePane(props: {
       <If when={acceptsDrop() && draggingFiles()}>
         <Text class="bg-muted px-2 py-1 text-xs text-foreground">Drop files to attach</Text>
       </If>
-      <View style={{ height: 8 }} onPress={props.onActivate} class="shrink-0" />
+      <View style={{ height: 8, cursor: draggingPane() ? "grabbing" : "grab" }}
+        class="shrink-0 items-center justify-center hover:bg-muted" tooltip="Drag to reorder pane"
+        onPress={props.onActivate} onPanStart={() => draggingPane.set(true)}
+        onPanEnd={({ cancelled, translation }) => {
+          draggingPane.set(false);
+          if (!cancelled && Math.abs(translation.x) > Math.abs(translation.y)) props.onDragReorder(translation.x);
+        }}>
+        <View style={{ width: 24, height: 2, pointerEvents: "none" }} class="rounded bg-border" />
+      </View>
       <NoteBody pane={props.pane} active={props.active} onActivate={props.onActivate} onNavigate={props.onNavigate}
         onHorizontalScroll={props.onHorizontalScroll} onDraft={props.onDraft} onEditorFocus={props.onEditorFocus}
-        actions={props.actions} />
+        getNoteTitle={getNoteTitle} actions={props.actions} />
       <BacklinksDrawer entries={props.entries} id={props.pane.id} onActivate={props.onActivate} onNavigate={props.onNavigate} />
       <AttachmentsDrawer files={props.pane.note?.attachments ?? []} busy={props.actions.busy}
         onAdd={() => props.actions.onAttach(props.pane.key)}

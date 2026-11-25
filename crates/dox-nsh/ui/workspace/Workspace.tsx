@@ -14,6 +14,7 @@ export function Workspace(props: {
   onNavigate: (id: string) => void;
   onEdit: (key: number) => void;
   onDraft: (key: number, source: string) => void;
+  onReorder: (key: number, offset: number) => void;
   onEditorFocus: (key: number, focused: boolean) => void;
   actions: PaneActions;
 }) {
@@ -60,6 +61,7 @@ export function Workspace(props: {
                 onActivate={() => props.onActivate(pane().key)}
                 onNavigate={props.onNavigate}
                 onHorizontalScroll={scrollHorizontally}
+                onDragReorder={(delta) => props.onReorder(pane().key, Math.sign(delta) * Math.round(Math.abs(delta) / paneWidth()))}
                 onEdit={() => { props.onActivate(pane().key); props.onEdit(pane().key); }}
                 onDraft={(source) => props.onDraft(pane().key, source)}
                 onEditorFocus={(focused) => props.onEditorFocus(pane().key, focused)}

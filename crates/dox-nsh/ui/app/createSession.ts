@@ -1,9 +1,10 @@
-import { batch, cleanup, computed, signal, Storage } from "nsh";
+import { batch, cleanup, Clipboard, computed, signal, Storage } from "nsh";
 import { AlertDialog } from "nsh/base";
-import type { InputRef } from "nsh/types";
+import type { SourceEditorRef } from "../workspace/sourceEditor";
 import { Reader } from "dox-nsh/native";
-import { dirty, type Pane, type PaneActions, type Reading, type Selection } from "../workspace/paneState";
-import type { GitSummary, Index, Opened } from "./sessionTypes";
+import { dirty, paneZoomPatch, type Pane, type PaneActions, type Reading, type Selection } from "../workspace/paneState";
+import { canOpenDiagnostic, diagnosticPosition, type GitSummary, type Index, type Issue, type Opened } from "./sessionTypes";
+import { isSyncPeer, reserveSync, sessionsFor } from "./windowSessions";
 
 const emptyIndex: Index = { entries: [], diagnostics: [] };
 const LIBRARY_KEY = "dox.library";
@@ -11,7 +12,7 @@ const AUTO_SYNC_IDLE = 10 * 60_000;
 const AUTO_SYNC_INTERVAL = 5 * 60_000;
 const autoSyncKey = (root: string) => `dox.git.automatic:${root}`;
 
-export function createSession() {
+export function createSession(sessionId: string) {
   const path = signal("");
   const index = signal(emptyIndex);
   const git = signal<GitSummary | null>(null);
@@ -32,10 +33,12 @@ export function createSession() {
   const syncError = signal("");
   const lastDeleted = signal<string | null>(null);
   const syncing = () => operation() === "Syncing…";
-  const busy = () => opening() || !!operation() || confirming();
-  const editors = new Map<number, InputRef>();
+  const syncPeer = () => isSyncPeer(path(), sessionId);
+  const busy = () => opening() || !!operation() || confirming() || syncPeer();
+  const editors = new Map<number, SourceEditorRef>();
   const selections = new Map<number, Selection>();
-  let pendingLink: (Selection & { key: number; source: string }) | undefined;
+  const editorFocusRequests = new Map<number, { range?: Selection }>();
+  let pendingLink: (Selection & { key: number; source: string; withTitle: boolean }) | undefined;
   let generation = 0;
   let seenChanges = 0;
   let lastEditAt = 0;
@@ -43,18 +46,20 @@ export function createSession() {
   let refreshAfterSave = false;
   const spareKey = signal(1);
   let gitRequest = 0;
+  let diagnosticRequest = 0;
+  const pendingReads = new Map<number, Promise<void>>();
 
   async function refresh(epoch: number) {
     if (!path() || refreshing()) return;
     refreshing.set(true);
     const serial = ++gitRequest;
-    void Reader.gitSummary().then((result) => {
+    void Reader.gitSummary(sessionId).then((result) => {
       if (epoch === generation && serial === gitRequest) git.set(result == null ? null : JSON.parse(result));
     }).catch(() => {
       if (epoch === generation && serial === gitRequest) git.set(null);
     });
     try {
-      const next: Index = JSON.parse(await Reader.refresh());
+      const next: Index = JSON.parse(await Reader.refresh(sessionId));
       if (epoch !== generation) return;
       index.set(next);
       for (const pane of panes()) {
@@ -86,13 +91,13 @@ export function createSession() {
     try {
       const stored = restore ? await Storage.getItem(LIBRARY_KEY) : null;
       if (restore && !stored) return;
-      const result = await Reader.openLibrary(stored);
+      const result = await Reader.openLibrary(sessionId, stored);
       if (result == null) return;
       const opened: Opened = JSON.parse(result);
       const epoch = ++generation;
       // The new session starts its own counter. Any changes during open are
       // picked up by the initial index refresh or by the next watcher tick.
-      seenChanges = Reader.changeVersion();
+      seenChanges = Reader.changeVersion(sessionId);
       watchError.set(opened.watch_error ?? "");
       path.set(opened.path);
       index.set(opened.index);
@@ -106,6 +111,7 @@ export function createSession() {
       activeKey.set(null);
       editors.clear();
       selections.clear();
+      editorFocusRequests.clear();
       editorFocused.set(null);
       refreshAfterSave = false;
       diagnosticsOpen.set(false);
@@ -141,7 +147,7 @@ export function createSession() {
     const existing = panes().find((pane) => pane.id === id);
     if (existing) {
       activate(existing.key, true);
-      if (!existing.error) return;
+      if (!existing.error) return pendingReads.get(existing.key);
     }
     const epoch = generation;
     const key = existing?.key ?? spareKey();
@@ -151,16 +157,36 @@ export function createSession() {
       if (!existing) spareKey.set(key + 1);
       activate(key, true);
     });
-    let result: Pane;
+    const read = (async () => {
+      let result: Pane;
+      try {
+        const note: Reading = JSON.parse(await Reader.readNote(sessionId, id));
+        result = { key, id, note };
+      } catch (error) {
+        result = { key, id, error: String(error) };
+      }
+      if (epoch === generation && paneByKey(key)) patchPane(key, result);
+    })();
+    pendingReads.set(key, read);
     try {
-      const note: Reading = JSON.parse(await Reader.readNote(id));
-      result = { key, id, note };
-    } catch (error) {
-      result = { key, id, error: String(error) };
+      await read;
+    } finally {
+      if (pendingReads.get(key) === read) pendingReads.delete(key);
     }
-    if (epoch === generation && panes().some((pane) => pane.key === key)) {
-      panes.set(panes().map((pane) => pane.key === key ? result : pane));
-    }
+  }
+
+  async function openDiagnostic(issue: Issue) {
+    const id = issue.note_id;
+    if (!id || busy() || !canOpenDiagnostic(issue, index().entries)) return;
+    const epoch = generation;
+    const request = ++diagnosticRequest;
+    await openNote(id);
+    const pane = activePane();
+    if (epoch !== generation || request !== diagnosticRequest || busy() ||
+        pane?.id !== id || !pane.note || pane.saving || pane.updating) return;
+    const position = diagnosticPosition(pane.draft ?? pane.note.source, pane.note.entry, issue, path());
+    if (!pane.editing) patchPane(pane.key, { editing: true });
+    focusEditor(pane.key, { start: position, end: position });
   }
 
   function paneByKey(key: number) {
@@ -194,7 +220,7 @@ export function createSession() {
     if (epoch !== generation || !current || current.saving || current.updating) return;
     patchPane(pane.key, { updating: true });
     try {
-      const note: Reading = JSON.parse(await Reader.readNote(pane.id));
+      const note: Reading = JSON.parse(await Reader.readNote(sessionId, pane.id));
       const live = paneByKey(pane.key);
       if (epoch !== generation || !live) return;
       // Edits can happen while a refresh is in flight. Only an explicitly
@@ -203,7 +229,14 @@ export function createSession() {
         if (live.note?.revision !== note.revision) patchPane(pane.key, { external: true });
         return;
       }
-      patchPane(pane.key, { note, draft: undefined, external: false, problem: undefined, error: undefined });
+      const resetEditor = discardDraft || live.note?.source !== note.source;
+      if (resetEditor) {
+        editors.delete(pane.key);
+        selections.delete(pane.key);
+      }
+      patchPane(pane.key, { note, draft: undefined, external: false, problem: undefined, error: undefined,
+        editorGeneration: resetEditor ? (live.editorGeneration ?? 0) + 1 : live.editorGeneration,
+      });
     } catch (error) {
       if (epoch === generation) patchPane(pane.key, { external: true, problem: `Could not reload: ${error}` });
     } finally {
@@ -246,7 +279,7 @@ export function createSession() {
     const source = pane.draft!;
     patchPane(key, { saving: true, problem: undefined });
     try {
-      const saved: Reading = JSON.parse(await Reader.saveNote(pane.id, source, pane.note.revision));
+      const saved: Reading = JSON.parse(await Reader.saveNote(sessionId, pane.id, source, pane.note.revision));
       const live = paneByKey(key);
       if (epoch !== generation || !live) return;
       const newer = live.draft !== source;
@@ -262,11 +295,17 @@ export function createSession() {
     }
   }
 
+  async function saveAllDrafts() {
+    const keys = panes().filter(dirty).map((pane) => pane.key);
+    for (const key of keys) await savePane(key, false);
+  }
+
   function finishEdit(key: number) {
     patchPane(key, { editing: false, draft: undefined });
     if (editorFocused() === key) editorFocused.set(null);
     editors.delete(key);
     selections.delete(key);
+    editorFocusRequests.delete(key);
   }
 
   function toggleEdit(key = activeKey()) {
@@ -278,7 +317,7 @@ export function createSession() {
   }
 
   function canLeaveLibrary() {
-    if (operation()) { libraryError.set("Wait for the library operation to finish."); return false; }
+    if (opening() || operation() || syncPeer()) { libraryError.set("Wait for the library operation to finish."); return false; }
     if (!panes().some((pane) => dirty(pane) || pane.saving)) return true;
     libraryError.set("Save or discard your drafts before switching libraries or quitting.");
     return false;
@@ -289,19 +328,33 @@ export function createSession() {
     return current < 0 ? undefined : panes()[current + offset];
   }
 
+  function zoomPane(change: number | "reset") {
+    const pane = activePane();
+    if (pane?.note) patchPane(pane.key, paneZoomPatch(pane, change));
+  }
+
   function focusNeighbor(offset: number) {
     const target = neighbor(offset);
     if (target) activate(target.key);
   }
 
-  function movePane(offset: number) {
-    const target = neighbor(offset);
-    if (!target) return;
+  function reorderPane(key: number, offset: number) {
     const order = [...panes()];
-    const current = order.findIndex((pane) => pane.key === activeKey());
-    [order[current], order[current + offset]] = [order[current + offset], order[current]];
-    panes.set(order);
-    reveal.set(reveal() + 1);
+    const from = order.findIndex((pane) => pane.key === key);
+    if (from < 0) return;
+    const to = Math.max(0, Math.min(order.length - 1, from + offset));
+    if (to === from) return;
+    const [pane] = order.splice(from, 1);
+    order.splice(to, 0, pane);
+    batch(() => {
+      panes.set(order);
+      activate(key, true);
+    });
+  }
+
+  function movePane(offset: number) {
+    const key = activeKey();
+    if (key !== null) reorderPane(key, offset);
   }
 
   async function closePane() {
@@ -333,6 +386,7 @@ export function createSession() {
     if (editorFocused() === key) editorFocused.set(null);
     editors.delete(key);
     selections.delete(key);
+    editorFocusRequests.delete(key);
     const remaining = panes().filter((item) => item.key !== key);
     panes.set(remaining);
     if (activeKey() === key) activeKey.set((remaining[position] ?? remaining[position - 1])?.key ?? null);
@@ -348,25 +402,35 @@ export function createSession() {
     return !!pane?.editing && pane.note?.entry.kind === "typst" && !pane.saving && !busy();
   }
 
-  function chooseLink() {
+  function chooseLink(withTitle = false) {
     const pane = activePane();
     if (!pane?.note || !canInsert()) return;
     const source = pane.draft ?? pane.note.source;
     const selection = selections.get(pane.key) ?? { start: 0, end: 0 };
-    pendingLink = { start: Math.min(selection.start, source.length), end: Math.min(selection.end, source.length), key: pane.key, source };
+    pendingLink = { start: Math.min(selection.start, source.length), end: Math.min(selection.end, source.length), key: pane.key, source, withTitle };
     overlay.set("link");
   }
 
+  function applyEditorFocus(key: number) {
+    const request = editorFocusRequests.get(key);
+    if (!request) return;
+    if (activeKey() !== key || !paneByKey(key)?.editing || overlay()) {
+      editorFocusRequests.delete(key);
+      return;
+    }
+    const editor = editors.get(key);
+    if (!editor) return;
+    editorFocusRequests.delete(key);
+    editor.focus();
+    if (request.range) {
+      selections.set(key, request.range);
+      editor.setSelection(request.range.start, request.range.end);
+    }
+  }
+
   function focusEditor(key: number, range?: Selection) {
-    requestAnimationFrame(() => {
-      const editor = editors.get(key);
-      if (!editor || activeKey() !== key || !paneByKey(key)?.editing || overlay()) return;
-      editor.focus();
-      if (range) {
-        selections.set(key, range);
-        editor.setSelection(range.start, range.end);
-      }
-    });
+    editorFocusRequests.set(key, { range });
+    requestAnimationFrame(() => applyEditorFocus(key));
   }
 
   function insertLink(id: string) {
@@ -380,10 +444,24 @@ export function createSession() {
       return;
     }
     const label = pending.source.slice(pending.start, pending.end) || target.title_markup || target.title;
-    const link = target.kind === "literature" ? `@${target.id}` : `#link("dox:${target.id}")[${label}]`;
-    setDraft(pane.key, pending.source.slice(0, pending.start) + link + pending.source.slice(pending.end));
-    const end = pending.start + link.length;
-    focusEditor(pane.key, { start: end, end });
+    const citation = `@${target.id}`;
+    const publicationTitle = target.title.replace(/\s+/g, " ").trim().replace(/[\\#@[\]{}$*_`<>~=+.\/-]/g, "\\$&");
+    const link = target.kind === "literature"
+      ? (pending.withTitle && publicationTitle ? `${publicationTitle} ${citation}` : citation)
+      : `#link("dox:${target.id}")[${label}]`;
+    if (!editors.get(pane.key)?.replaceRange(pending.start, pending.end, link)) {
+      libraryError.set("Could not insert the link while the editor is unavailable.");
+      return;
+    }
+    focusEditor(pane.key);
+  }
+
+  async function copyReference() {
+    const note = activePane()?.note?.entry;
+    if (!note) return;
+    await Clipboard.writeText(note.kind === "literature"
+      ? `@${note.id}`
+      : `#link("dox:${note.id}")[${note.title_markup || note.title}]`);
   }
 
   function closeLinkPicker() {
@@ -453,7 +531,7 @@ export function createSession() {
       if (dirty(current)) await savePane(current.key, false);
       const live = paneByKey(current.key);
       if (!live?.note || dirty(live) || live.saving) throw new Error("Delete stopped because the draft could not be saved.");
-      const trashEntry = await Reader.deleteNote(live.id, live.note.revision);
+      const trashEntry = await Reader.deleteNote(sessionId, live.id, live.note.revision);
       lastDeleted.set(trashEntry);
       removePane(live.key);
       index.set({ ...index(), entries: index().entries.filter((entry) => entry.id !== live.id) });
@@ -465,11 +543,18 @@ export function createSession() {
     const entry = lastDeleted();
     if (!entry || busy()) return;
     await withOperation("Restoring note…", async () => {
-      const note: Reading = JSON.parse(await Reader.restoreNote(entry));
+      const note: Reading = JSON.parse(await Reader.restoreNote(sessionId, entry));
       lastDeleted.set(null);
       const existing = panes().find((pane) => pane.id === note.entry.id);
       if (existing && !dirty(existing)) {
-        patchPane(existing.key, { note, error: undefined, problem: undefined, external: false });
+        const resetEditor = existing.note?.source !== note.source;
+        if (resetEditor) {
+          editors.delete(existing.key);
+          selections.delete(existing.key);
+        }
+        patchPane(existing.key, { note, error: undefined, problem: undefined, external: false,
+          editorGeneration: resetEditor ? (existing.editorGeneration ?? 0) + 1 : existing.editorGeneration,
+        });
       }
       showReading(note);
       refreshAfterSave = true;
@@ -478,7 +563,7 @@ export function createSession() {
 
   async function createNote(kind: "note" | "daily" | "literature") {
     await withOperation("Opening note…", async () => {
-      const note: Reading = JSON.parse(await Reader.createNote(kind));
+      const note: Reading = JSON.parse(await Reader.createNote(sessionId, kind));
       showReading(note, true, kind === "note");
       refreshAfterSave = true;
     });
@@ -506,7 +591,7 @@ export function createSession() {
   async function attach(key: number) {
     const pane = paneByKey(key);
     if (!pane?.note) return;
-    await withOperation("Attaching files…", async () => { updateAttachments(key, await Reader.addAttachments(pane.id)); });
+    await withOperation("Attaching files…", async () => { updateAttachments(key, await Reader.addAttachments(sessionId, pane.id)); });
   }
 
   async function removeAttachment(key: number, name: string) {
@@ -519,7 +604,7 @@ export function createSession() {
         actions: [{ id: "cancel", label: "Cancel", role: "cancel" }, { id: "remove", label: "Remove", role: "destructive" }], closeOnEscape: true }));
     } finally { confirming.set(false); }
     if (action === "remove") await withOperation("Removing attachment…", async () => {
-      updateAttachments(key, await Reader.removeAttachment(pane.id, name));
+      updateAttachments(key, await Reader.removeAttachment(sessionId, pane.id, name));
     });
   }
 
@@ -527,38 +612,63 @@ export function createSession() {
     return !busy() && !refreshing() && !panes().some((pane) => pane.saving || pane.updating);
   }
 
+  function applyAutomaticSync(enabled: boolean) {
+    automatic.set(enabled);
+    if (enabled) nextAutoSyncAt = Date.now() + AUTO_SYNC_IDLE;
+  }
+
   async function toggleAutomaticSync() {
     const root = path();
     if (!root || busy() || (!automatic() && !git()?.upstream)) return;
     const enabled = !automatic();
-    automatic.set(enabled);
-    if (enabled) nextAutoSyncAt = Date.now() + AUTO_SYNC_IDLE;
+    applyAutomaticSync(enabled);
     try {
       await Storage.setItem(autoSyncKey(root), String(enabled));
+      if (path() === root && automatic() === enabled) {
+        for (const peer of sessionsFor(root)) {
+          if (peer.sessionId !== sessionId) peer.applyAutomaticSync(enabled);
+        }
+      }
     } catch (error) {
       if (path() === root && automatic() === enabled) automatic.set(!enabled);
       throw error;
     }
   }
 
+  const hasUnsavedDrafts = () => panes().some((pane) => dirty(pane) || pane.saving);
+  const idleForSync = (now: number) => now - lastEditAt >= AUTO_SYNC_IDLE;
+  function afterSync() {
+    nextAutoSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
+    refreshAfterSave = true;
+  }
+
   async function syncNow() {
-    if (!canSync()) return;
-    await withOperation("Syncing…", async () => {
-      syncError.set("");
-      try {
-        for (const pane of panes()) {
-          if (dirty(pane)) await savePane(pane.key, false);
+    const root = path();
+    if (!root || !canSync()) return;
+    const peers = sessionsFor(root).filter((peer) => peer.sessionId !== sessionId);
+    if (peers.some((peer) => !peer.canSync())) throw new Error("Wait for the library operation in the other window to finish.");
+    const release = reserveSync(root, sessionId);
+    if (!release) return;
+    try {
+      await withOperation("Syncing…", async () => {
+        syncError.set("");
+        try {
+          await saveAllDrafts();
+          for (const peer of peers) await peer.saveAllDrafts();
+          if (hasUnsavedDrafts() || peers.some((peer) => peer.hasUnsavedDrafts())) {
+            throw new Error("Sync stopped because not all drafts could be saved.");
+          }
+          await Reader.syncLibrary(sessionId);
+        } catch (error) {
+          syncError.set(error instanceof Error ? error.message : String(error));
+          throw error;
         }
-        if (panes().some((pane) => dirty(pane) || pane.saving)) throw new Error("Sync stopped because not all drafts could be saved.");
-        await Reader.syncLibrary();
-      } catch (error) {
-        syncError.set(error instanceof Error ? error.message : String(error));
-        throw error;
-      } finally {
-        nextAutoSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
-        refreshAfterSave = true;
-      }
-    });
+      });
+    } finally {
+      afterSync();
+      for (const peer of peers) peer.afterSync();
+      release();
+    }
   }
 
   function refreshIndex() {
@@ -567,28 +677,31 @@ export function createSession() {
 
   function findPaper(pane: Pane) {
     return withOperation("Finding PDF…", async () => {
-      updateAttachments(pane.key, await Reader.findPaperPdf(pane.id, pane.draft));
+      updateAttachments(pane.key, await Reader.findPaperPdf(sessionId, pane.id, pane.draft));
     });
   }
 
-  const importBibtex = () => importItem(() => Reader.importBibtex());
-  const importPublication = (query: string) => importItem(() => Reader.importPublication(query));
+  const importBibtex = () => importItem(() => Reader.importBibtex(sessionId));
+  const importPublication = (query: string) => importItem(() => Reader.importPublication(sessionId, query));
 
   function paneActions(): PaneActions {
     return {
       busy: busy(),
-      locked: syncing() || opening() || operation() === "Deleting note…",
-      onEditor: (key, editor) => editors.set(key, editor),
+      locked: syncing() || syncPeer() || opening() || operation() === "Deleting note…",
+      onEditor: (key, editor) => {
+        editors.set(key, editor);
+        if (editorFocusRequests.has(key)) requestAnimationFrame(() => applyEditorFocus(key));
+      },
       onSelection: (key, selection) => selections.set(key, selection),
       onAttach: (key) => void report(() => attach(key)),
       onDropAttachments: (key, uris) => {
         const pane = paneByKey(key);
         if (!pane || !uris.length || busy()) return;
         void report(() => withOperation("Attaching files…", async () => {
-          updateAttachments(key, await Reader.dropAttachments(pane.id, uris));
+          updateAttachments(key, await Reader.dropAttachments(sessionId, pane.id, uris));
         }));
       },
-      onOpenAttachment: (key, name) => { const pane = paneByKey(key); if (pane) void report(() => Reader.openAttachment(pane.id, name)); },
+      onOpenAttachment: (key, name) => { const pane = paneByKey(key); if (pane) void report(() => Reader.openAttachment(sessionId, pane.id, name)); },
       onRemoveAttachment: (key, name) => void report(() => removeAttachment(key, name)),
     };
   }
@@ -600,7 +713,7 @@ export function createSession() {
 
   const poll = setInterval(() => {
     if (!path() || busy() || refreshing() || panes().some((pane) => pane.saving)) return;
-    const version = Reader.changeVersion();
+    const version = Reader.changeVersion(sessionId);
     if (version !== seenChanges || refreshAfterSave) {
       seenChanges = version;
       refreshAfterSave = false;
@@ -609,20 +722,26 @@ export function createSession() {
     }
     const now = Date.now();
     if (automatic() && git()?.upstream && !overlay() && canSync() &&
-        now >= nextAutoSyncAt && now - lastEditAt >= AUTO_SYNC_IDLE) {
+        now >= nextAutoSyncAt && idleForSync(now) &&
+        sessionsFor(path()).every((peer) => peer.canSync() && peer.idleForSync(now))) {
       void report(syncNow);
     }
   }, 500);
-  cleanup(() => clearInterval(poll));
+  cleanup(() => {
+    clearInterval(poll);
+    generation++;
+    Reader.closeSession(sessionId);
+  });
 
   return {
     path, index, git, panes, activeKey, reveal, overlay, diagnosticsOpen, automatic,
     opening, refreshing, libraryError, watchError, confirming, editorFocused, activePane,
     operation, syncError, lastDeleted, syncing, busy, spareKey,
-    openLibrary, activate, openNote, savePane, toggleEdit, canLeaveLibrary, neighbor,
-    focusNeighbor, movePane, closePane, findNotes, canInsert, chooseLink, insertLink,
+    openLibrary, activate, openNote, savePane, saveAllDrafts, toggleEdit, canLeaveLibrary, neighbor,
+    focusNeighbor, movePane, reorderPane, zoomPane, closePane, findNotes, canInsert, chooseLink, insertLink, copyReference,
     closeLinkPicker, report, canDelete, deleteNote, restoreNote, createNote, attach,
     canSync, toggleAutomaticSync, syncNow, confirmReload, setDraft,
+    sessionId, hasUnsavedDrafts, idleForSync, afterSync, openDiagnostic, applyAutomaticSync,
     refreshIndex, findPaper, importBibtex, importPublication, paneActions, onEditorFocus,
   };
 }

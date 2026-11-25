@@ -32,6 +32,9 @@ const SHELL = Reader.previewShell();
 export function NotePreview(props: {
     html: string | null;
     title: string;
+    active: boolean;
+    zoom: number;
+    getNoteTitle: (id: string) => string | undefined;
     onActivate: () => void;
     onNote: (id: string) => void;
     onHorizontalScroll: (delta: number) => void;
@@ -39,6 +42,7 @@ export function NotePreview(props: {
     const failure = signal("");
     const view = signal<WebViewRef>();
     const shellReady = signal(false);
+    const tooltipRequest = signal<{ id: string }>();
     let lastHtml: string | null = null;
     let lastTitle = "";
 
@@ -60,6 +64,28 @@ export function NotePreview(props: {
         web.postMessage(JSON.stringify({ type: "render-note", html, title }));
     });
 
+    effect(() => {
+        const web = view();
+        const active = props.active;
+        if (web && shellReady()) web.postMessage(JSON.stringify({ type: "set-active", active }));
+    });
+
+    effect(() => {
+        const web = view();
+        const zoom = props.zoom;
+        if (web && shellReady()) web.postMessage(JSON.stringify({ type: "set-zoom", zoom }));
+    });
+
+    // Track only the requested title, independently of note rendering and scroll.
+    effect(() => {
+        const web = view();
+        const request = tooltipRequest();
+        if (!web || !shellReady() || !request) return;
+        const { id } = request;
+        const title = props.getNoteTitle(id) ?? "";
+        web.postMessage(JSON.stringify({ type: "set-link-title", id, title }));
+    });
+
     function receive({ data }: { data: string }) {
         // nsh supplies a string, not an authenticated message or an origin.
         if (typeof data !== "string") return;
@@ -67,12 +93,16 @@ export function NotePreview(props: {
             shellReady.set(true);
             return;
         }
+        if (data.startsWith("tooltip:")) {
+            const id = data.slice(8);
+            tooltipRequest.set(props.html !== null && validNoteId(id) ? { id } : undefined);
+            return;
+        }
         if (props.html === null) return;
         if (data === "render-error") {
             failure.set("Could not display the note preview.");
         } else if (data === "activate") {
             props.onActivate();
-
         } else if (data.startsWith("wheel-x:")) {
             const delta = Number(data.slice(8));
             if (Number.isFinite(delta) && delta !== 0) props.onHorizontalScroll(Math.max(-2000, Math.min(2000, delta)));

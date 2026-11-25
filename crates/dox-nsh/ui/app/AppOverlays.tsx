@@ -10,6 +10,7 @@ export function AppOverlays(props: { state: OverlayState; commands: readonly Pic
   const noteItems = computed<PickerItem[]>(() => index().entries.map((entry) => ({
     id: entry.id,
     title: entry.title,
+    titleSpans: entry.title_spans,
     detail: entry.id,
     icon: entry.kind === "literature" ? "reference" : "note",
   })));

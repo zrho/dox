@@ -1,5 +1,5 @@
 {
-  "name": "dox NSH",
+  "name": "Dox",
   "id": "app.dox.nsh",
   "version": "0.1.0",
   "build": 1,
@@ -47,6 +47,8 @@
   },
   "capabilities": {
     "application": true,
+    "clipboard": true,
+    "windows": { "kinds": ["normal"], "levels": ["normal"] },
     "webview": {},
     "openUrl": { "schemes": ["http", "https"] }
   }

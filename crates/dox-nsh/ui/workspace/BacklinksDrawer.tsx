@@ -1,6 +1,6 @@
-import { Text } from "nsh";
 import { Button } from "nsh/base";
 import { Drawer } from "../design/Drawer";
+import { NoteTitle } from "../design/NoteTitle";
 import type { Entry } from "./paneState";
 
 export function BacklinksDrawer(props: {
@@ -16,8 +16,8 @@ export function BacklinksDrawer(props: {
       renderRows={() => (
         <Each of={backlinks()} key={(item) => item.id}>
           {(item) => (
-            <Button class="h-5 justify-center px-2 hover:bg-muted" onPress={() => props.onNavigate(item().id)}>
-              <Text class="text-xs text-foreground line-clamp-1">{item().title}</Text>
+            <Button class="h-5 justify-center px-2 hover:bg-muted" accessibilityLabel={item().title} onPress={() => props.onNavigate(item().id)}>
+              <NoteTitle title={item().title} spans={item().title_spans} class="text-xs text-foreground line-clamp-1" />
             </Button>
           )}
         </Each>
