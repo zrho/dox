@@ -2,6 +2,7 @@ import { effect, openUrl, signal, Text, WebView } from "nsh";
 import { Reader } from "dox-nsh/native";
 import type { WebViewRef } from "nsh/types";
 import type { JSX } from "nsh/jsx-runtime";
+import { appearance } from "../design/appearance";
 
 // Match dox_core::valid_id, including calendar validation for daily notes.
 function validNoteId(id: string): boolean {
@@ -28,7 +29,7 @@ function externalUrl(value: string): string | undefined {
 const SHELL = Reader.previewShell();
 
 /** Note HTML is data for the fixed shell, never the WebView's page source. */
-export function Preview(props: {
+export function NotePreview(props: {
     html: string | null;
     title: string;
     onActivate: () => void;
@@ -40,6 +41,12 @@ export function Preview(props: {
     const shellReady = signal(false);
     let lastHtml: string | null = null;
     let lastTitle = "";
+
+    effect(() => {
+        const web = view();
+        const theme = appearance();
+        if (web && shellReady()) web.postMessage(JSON.stringify({ type: "set-theme", theme }));
+    });
 
     effect(() => {
         const web = view();

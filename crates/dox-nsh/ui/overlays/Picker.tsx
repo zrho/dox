@@ -1,7 +1,10 @@
 import { computed, effect, keymap, List, signal, Text, View, windowSize } from "nsh";
-import { Button, Dialog, Input } from "nsh/base";
+import { Button } from "nsh/base";
 import type { ListRef } from "nsh/types";
-import { Icon, type ItemIcon } from "./Icon";
+import { DialogSurface } from "../design/DialogSurface";
+import { Icon, type ItemIcon } from "../design/Icon";
+import { SearchField } from "../design/SearchField";
+import { createPickerSearch } from "./pickerSearch";
 
 export type PickerItem = {
   id: string;
@@ -15,6 +18,7 @@ export type PickerItem = {
 
 type PickerProps = {
   title: string;
+  searchIcon?: "search" | "command";
   placeholder: string;
   items: readonly PickerItem[];
   onSelect: (id: string) => void;
@@ -24,27 +28,6 @@ type PickerProps = {
 const ROW_HEIGHT = 36;
 const LIST_PADDING = 4;
 
-function normalize(text: string): string {
-  return text.normalize("NFC").toLowerCase();
-}
-
-function matchRank(text: string, term: string): number {
-  if (text === term) return 0;
-  const position = text.indexOf(term);
-  if (position === 0) return 1;
-  if (position > 0) return 2 + position / text.length;
-
-  // For a subsequence, prefer compact matches near the start of the text.
-  let end = -1;
-  let start = -1;
-  for (const char of term) {
-    end = text.indexOf(char, end + 1);
-    if (end < 0) return Infinity;
-    if (start < 0) start = end;
-  }
-  return 3 + (end - start + end) / (2 * text.length);
-}
-
 /** Mount only while open. A selection calls onClose before onSelect. */
 export function Picker(props: PickerProps) {
   const query = signal("");
@@ -53,25 +36,7 @@ export function Picker(props: PickerProps) {
   let list: ListRef | undefined;
   let closing = false;
 
-  const candidates = computed(() => props.items.map((item) => ({
-    item,
-    fields: [item.title, item.id, item.search ?? "", item.detail ?? ""].map(normalize),
-  })));
-  const matches = computed(() => {
-    const needle = normalize(query().trim());
-    if (!needle) return props.items;
-    const terms = needle.split(/\s+/);
-    return candidates()
-      .map(({ item, fields }) => ({
-        item,
-        rank: terms.reduce((total, term) => total + Math.min(
-          ...fields.map((field, index) => matchRank(field, term) + index * 0.15),
-        ), 0),
-      }))
-      .filter(({ rank }) => Number.isFinite(rank))
-      .sort((a, b) => a.rank - b.rank)
-      .map(({ item }) => item);
-  });
+  const matches = createPickerSearch(() => props.items, query);
   const activeIndex = computed(() => {
     const items = matches();
     const id = cursorId();
@@ -119,37 +84,33 @@ export function Picker(props: PickerProps) {
   });
 
   return (
-    // Dialog presents in a native layer above the workspace, including its web view.
-    <Dialog
-      animation="none"
+    <DialogSurface
       accessibilityLabel={props.title}
-      backdropStyle={{ backgroundColor: "#00000033" }}
       onOpenChange={({ open }) => { if (!open) close(); }}
-      class="rounded-lg border border-border bg-background"
-      style={{ alignSelf: "center", top: "14%", width: "92%", maxWidth: 560, boxShadow: "0 16px 48px #00000040" }}
     >
       <View>
         <View class="gap-1 border-b border-border px-3 py-2">
-          <Text class="text-xs font-semibold text-muted-foreground line-clamp-1">{props.title}</Text>
-          <Input
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-            class="rounded-md bg-muted px-2 py-2 text-sm text-foreground"
-            accessibilityLabel={props.title}
-            placeholder={props.placeholder}
-            value={query()}
-            onChange={({ value }) => {
-              query.set(value);
-              cursorId.set(null);
-              const index = activeIndex();
-              if (index > 0) list?.scrollToIndex({ index, animated: false });
-              else list?.scrollToOffset({ offset: 0, animated: false });
-            }}
-            onCompositionChange={(event) => composing.set(event.composing)}
-            submitBehavior="submit"
-            onSubmit={() => { if (!composing()) choose(matches()[activeIndex()]); }}
-          />
+          <If when={!props.searchIcon}>
+            <Text class="text-xs font-semibold text-muted-foreground line-clamp-1">{props.title}</Text>
+          </If>
+          <View class="flex-row items-center gap-2">
+            <If when={props.searchIcon}>{(icon) => <Icon name={icon()} />}</If>
+            <SearchField
+              stretch
+              accessibilityLabel={props.title}
+              placeholder={props.placeholder}
+              value={query()}
+              onChange={({ value }) => {
+                query.set(value);
+                cursorId.set(null);
+                const index = activeIndex();
+                if (index > 0) list?.scrollToIndex({ index, animated: false });
+                else list?.scrollToOffset({ offset: 0, animated: false });
+              }}
+              onCompositionChange={(event) => composing.set(event.composing)}
+              onSubmit={() => { if (!composing()) choose(matches()[activeIndex()]); }}
+            />
+          </View>
         </View>
         <List
           ref={(node) => { list = node; }}
@@ -178,6 +139,6 @@ export function Picker(props: PickerProps) {
           )}
         </List>
       </View>
-    </Dialog>
+    </DialogSurface>
   );
 }

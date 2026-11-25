@@ -20,4 +20,6 @@ Use **Attach files to item** or drop local files onto a note pane to copy files 
 
 **Sync now** saves open drafts, then syncs the library’s Git repository. Configure the repository, upstream, identity, and authentication outside dox. **Enable automatic sync** is off by default and is remembered for each library. When enabled, the app waits at least ten minutes after opening the library, enabling the option, or editing a draft. While the library stays idle, it attempts to sync no more than once every five minutes. **Disable automatic sync** stops future attempts.
 
+The app follows the system appearance with Ayu Light and Ayu Dark. In the command panel, choose **Theme: Switch to dark mode** or **Theme: Switch to light mode** to override it, or **Theme: Follow system appearance** to clear the override.
+
 Drag-to-reorder is not available in this version.

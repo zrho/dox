@@ -5,6 +5,46 @@
   "build": 1,
   "icon": "icon.png",
   "rust": ".",
+  "appearance": "system",
+  "theme": {
+    "cssVars": {
+      "theme": {
+        "card-foreground": "var(--foreground)",
+        "popover-foreground": "var(--foreground)",
+        "secondary": "var(--muted)",
+        "secondary-foreground": "var(--foreground)",
+        "accent-foreground": "var(--foreground)",
+        "input": "var(--border)",
+        "ring": "var(--primary)"
+      },
+      "light": {
+        "background": "#fcfcfc",
+        "foreground": "#5c6166",
+        "card": "#f8f9fa",
+        "popover": "#ffffff",
+        "muted": "#ebeef0",
+        "muted-foreground": "#687789",
+        "border": "#dce1e6",
+        "primary": "#f29718",
+        "primary-foreground": "#2d2117",
+        "accent": "#e8edf2",
+        "destructive": "#b93838"
+      },
+      "dark": {
+        "background": "#10141c",
+        "foreground": "#bfbdb6",
+        "card": "#141821",
+        "popover": "#0f131a",
+        "muted": "#0d1017",
+        "muted-foreground": "#8a96a8",
+        "border": "#292f3a",
+        "primary": "#e6b450",
+        "primary-foreground": "#241b0d",
+        "accent": "#232b38",
+        "destructive": "#f26d78"
+      }
+    }
+  },
   "capabilities": {
     "application": true,
     "webview": {},

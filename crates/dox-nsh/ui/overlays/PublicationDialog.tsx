@@ -1,5 +1,7 @@
 import { effect, keymap, signal, Text, View } from "nsh";
-import { Button, Dialog, Input } from "nsh/base";
+import { Button } from "nsh/base";
+import { DialogSurface } from "../design/DialogSurface";
+import { SearchField } from "../design/SearchField";
 
 const DESCRIPTION = "Enter a DOI, arXiv ID, or publication link.";
 
@@ -42,25 +44,20 @@ export function PublicationDialog(props: {
   });
 
   return (
-    <Dialog
+    <DialogSurface
       open={open()}
-      animation="none"
       accessibilityLabel="Import publication"
       accessibilityDescription={DESCRIPTION}
-      backdropStyle={{ backgroundColor: "#00000033" }}
       closeOnEscape={false}
       closeOnBackdropPress={false}
       closeOnSwipe={false}
       onCancel={close}
-      class="rounded-lg border border-border bg-background"
-      style={{ alignSelf: "center", top: "14%", width: "92%", maxWidth: 560, boxShadow: "0 16px 48px #00000040" }}
     >
       <View class="gap-2 px-4 py-3">
         <Text class="text-sm font-semibold text-foreground">Import publication</Text>
         <Text class="text-xs text-muted-foreground">{DESCRIPTION}</Text>
-        <Input
-          autoFocus autoCapitalize="none" autoCorrect={false} readonly={busy()}
-          class="rounded-md bg-muted px-2 py-2 text-sm text-foreground"
+        <SearchField
+          readonly={busy()}
           accessibilityLabel="Publication identifier or link"
           placeholder="10.1038/… or https://arxiv.org/abs/…"
           value={input()}
@@ -70,7 +67,6 @@ export function PublicationDialog(props: {
             error.set("");
           }}
           onCompositionChange={({ composing: active }) => composing.set(active)}
-          submitBehavior="submit"
           onSubmit={() => { void submit(); }}
         />
         <If when={error()}>
@@ -89,6 +85,6 @@ export function PublicationDialog(props: {
           </Button>
         </View>
       </View>
-    </Dialog>
+    </DialogSurface>
   );
 }

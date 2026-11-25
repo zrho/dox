@@ -163,7 +163,7 @@ pub(crate) fn render(source: &str, id: &str, title: &str) -> Result<String> {
     };
     entries.sort_by(|(a, _), (b, _)| rank(a).cmp(&rank(b)).then_with(|| a.cmp(b)));
     let mut html = format!(
-        "<h1>{}</h1><table class=\"literature-fields\" aria-label=\"Reference details\"><tbody><tr><th scope=\"row\">Publication type</th><td>{}</td></tr>",
+        "<h1>{}</h1><table class=\"literature-fields\" aria-label=\"Reference details\"><tbody><tr><th scope=\"row\">Type</th><td>{}</td></tr>",
         escape_html(title),
         escape_html(kind)
     );

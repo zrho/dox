@@ -1,7 +1,8 @@
-import { colorScheme, Image } from "nsh";
-import { Button } from "nsh/base";
+import { Image, token } from "nsh";
 
 const paths = {
+  search: "M21 21l-4.3-4.3 M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0z",
+  command: "M9 7V5a2 2 0 1 0-2 2h10a2 2 0 1 0-2-2v14a2 2 0 1 0 2-2H7a2 2 0 1 0 2 2z",
   note: "M5 3h9l5 5v13H5z M14 3v5h5 M8 12h8 M8 16h8",
   reference: "M4 5h5q2 0 3 2 1-2 3-2h5v13h-5q-2 0-3 2-1-2-3-2H4z M12 7v13",
   add: "M12 5v14 M5 12h14",
@@ -26,16 +27,6 @@ function source(name: IconName, color: string) {
 }
 
 export function Icon(props: { name: IconName; size?: number }) {
-  return <Image src={source(props.name, colorScheme() === "dark" ? "#aeb5c1" : "#596373")}
+  return <Image src={source(props.name, token("muted-foreground"))}
     style={{ width: props.size ?? 15, height: props.size ?? 15, flexShrink: 0 }} accessible={false} />;
-}
-
-export function IconButton(props: { icon: IconName; label: string; disabled?: boolean; onPress: () => void }) {
-  return (
-    <Button class="shrink-0 items-center justify-center rounded hover:bg-muted disabled:opacity-50"
-      style={{ width: 22, height: 20 }} accessibilityLabel={props.label} tooltip={props.label}
-      disabled={props.disabled} onPress={props.onPress}>
-      <Icon name={props.icon} />
-    </Button>
-  );
 }

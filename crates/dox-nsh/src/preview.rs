@@ -1,11 +1,17 @@
 //! The fixed, isolated WebView shell. Note HTML arrives as data, never as a navigation.
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+
 const START: &str = r#"<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Zahb3ZkU7m6WJbtu36j5n3NbGIuF44bWu4wh6dF3YmI='; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
-<title>Note preview</title>
-</head><body style="margin:0"><main id="preview"></main><template id="preview-style"><style>"#;
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-j7UKH1N4J6yFplKLZrW5NPnX8rLnQ9jNOVQfbpjo7og='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<title>Note preview</title><style>"#;
+
+const FONT_FACES: [(&str, &[u8]); 2] = [
+    ("normal", include_bytes!("../fonts/lora/Lora.ttf")),
+    ("italic", include_bytes!("../fonts/lora/Lora-Italic.ttf")),
+];
 
 const STYLES: &str = include_str!("preview.css");
 
@@ -177,6 +183,10 @@ const BOOTSTRAP: &str = r###"(() => {
         if (typeof event.data !== 'string') return;
         try {
             const data = JSON.parse(event.data);
+            if (data?.type === 'set-theme') {
+                if (data.theme === 'light' || data.theme === 'dark') root.host.dataset.theme = data.theme;
+                return;
+            }
             if (data?.type !== 'render-note' || typeof data.html !== 'string' || typeof data.title !== 'string') return;
             render(data);
         } catch {
@@ -187,12 +197,19 @@ const BOOTSTRAP: &str = r###"(() => {
 })();"###;
 
 pub fn shell() -> String {
-    [
-        START,
-        STYLES,
-        "</style></template><script>",
-        BOOTSTRAP,
-        "</script></body></html>",
-    ]
-    .concat()
+    let mut page = String::from(START);
+    // Define the faces at document scope so the preview's shadow tree can use them.
+    for (style, font) in FONT_FACES {
+        page.push_str("@font-face{font-family:Lora;font-weight:400 700;font-style:");
+        page.push_str(style);
+        page.push_str(";src:url(data:font/ttf;base64,");
+        STANDARD.encode_string(font, &mut page);
+        page.push_str(") format('truetype');}");
+    }
+    page.push_str(r#"</style></head><body style="margin:0"><main id="preview"></main><template id="preview-style"><style>"#);
+    page.push_str(STYLES);
+    page.push_str("</style></template><script>");
+    page.push_str(BOOTSTRAP);
+    page.push_str("</script></body></html>");
+    page
 }
